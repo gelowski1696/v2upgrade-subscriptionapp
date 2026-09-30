@@ -17,6 +17,8 @@ import type {
   WebAnalyticsOverview,
 } from '../../core/models/api.models';
 
+type AnalyticsTab = 'overview' | 'usage' | 'experience' | 'issues';
+
 @Component({
   selector: 'app-web-analytics',
   imports: [
@@ -31,6 +33,13 @@ import type {
   styleUrl: './web-analytics.css',
 })
 export class WebAnalyticsPage {
+  readonly tabs: ReadonlyArray<{ id: AnalyticsTab; label: string }> = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'usage', label: 'Usage' },
+    { id: 'experience', label: 'Experience' },
+    { id: 'issues', label: 'Issues' },
+  ];
+  readonly activeTab = signal<AnalyticsTab>('overview');
   readonly loading = signal(false);
   readonly filterLoading = signal(false);
   readonly error = signal('');
@@ -108,6 +117,30 @@ export class WebAnalyticsPage {
 
   clientChanged(): void {
     this.storeId = '';
+  }
+
+  selectTab(tab: AnalyticsTab): void {
+    this.activeTab.set(tab);
+  }
+
+  handleTabKeydown(event: KeyboardEvent, current: AnalyticsTab): void {
+    const currentIndex = this.tabs.findIndex((tab) => tab.id === current);
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % this.tabs.length;
+    else if (event.key === 'ArrowLeft') {
+      nextIndex = (currentIndex - 1 + this.tabs.length) % this.tabs.length;
+    } else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = this.tabs.length - 1;
+    else return;
+
+    event.preventDefault();
+    const next = this.tabs[nextIndex];
+    if (!next) return;
+    this.activeTab.set(next.id);
+    const buttons = (
+      event.currentTarget as HTMLElement
+    ).parentElement?.querySelectorAll<HTMLElement>('[role="tab"]');
+    buttons?.[nextIndex]?.focus();
   }
 
   setPreset(days: number): void {

@@ -158,247 +158,303 @@
         </section>
       }
 
-      <section aria-labelledby="analytics-status-heading">
-        <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <p class="page-eyebrow">Observed activity</p>
-            <h2 id="analytics-status-heading" class="text-lg font-bold">{{ scopeLabel }}</h2>
-          </div>
-          <p class="text-xs text-ink-600">
-            {{ report.range.from }}–{{ report.range.to }} · UTC · refreshed
-            {{ timestamp(report.generatedAt) }}
-          </p>
-        </div>
-
-        <dl class="metric-rail">
-          <div>
-            <dt>Active users</dt>
-            <dd>{{ report.summary.activeUsers }}</dd>
-          </div>
-          <div>
-            <dt>Sessions</dt>
-            <dd>{{ report.summary.sessions }}</dd>
-          </div>
-          <div>
-            <dt>Page views</dt>
-            <dd>{{ report.summary.pageViews }}</dd>
-          </div>
-          <div>
-            <dt>Affected sessions</dt>
-            <dd>{{ report.summary.affectedSessionRate }}%</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section class="analytics-section" aria-labelledby="usage-heading">
-        <div class="section-heading">
-          <div>
-            <p class="page-eyebrow">Usage</p>
-            <h2 id="usage-heading" class="text-xl font-bold">Page views by day</h2>
-          </div>
-          <p class="text-xs text-ink-600">Daily authenticated dashboard activity</p>
-        </div>
-
-        @if (report.usage.length) {
-          <div class="overflow-x-auto">
-            <div class="usage-chart" role="img" aria-label="Daily owner dashboard page views">
-              @for (point of report.usage; track point.day) {
-                <div
-                  class="usage-column group"
-                  [title]="dayLabel(point.day) + ': ' + point.pageViews + ' page views'"
-                >
-                  <span class="usage-value">{{ point.pageViews }}</span>
-                  <span class="usage-bar" [style.height.%]="barHeight(point.pageViews)"></span>
-                  <span class="usage-day">{{ dayLabel(point.day) }}</span>
-                </div>
-              }
-            </div>
-          </div>
-
-          <details class="mt-4 border-t border-champagne-200 pt-3">
-            <summary class="cursor-pointer text-xs font-bold text-gold-700">
-              Accessible data table
-            </summary>
-            <div class="mt-3 overflow-x-auto">
-              <table class="analytics-table min-w-[36rem]">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Active users</th>
-                    <th>Sessions</th>
-                    <th>Page views</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (point of report.usage; track point.day) {
-                    <tr>
-                      <td>{{ dayLabel(point.day) }}</td>
-                      <td>{{ point.activeUsers }}</td>
-                      <td>{{ point.sessions }}</td>
-                      <td>{{ point.pageViews }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          </details>
-        } @else {
-          <div class="analytics-empty">
-            <svg lucideActivity class="size-7"></svg>
-            <p>No dashboard activity was recorded in this period.</p>
-          </div>
+      <nav class="workspace-tabs" role="tablist" aria-label="Website analytics sections">
+        @for (tab of tabs; track tab.id) {
+          <button
+            type="button"
+            class="workspace-tab"
+            role="tab"
+            [id]="'analytics-tab-' + tab.id"
+            [attr.aria-selected]="activeTab() === tab.id"
+            [attr.aria-controls]="'analytics-panel-' + tab.id"
+            [tabindex]="activeTab() === tab.id ? 0 : -1"
+            (click)="selectTab(tab.id)"
+            (keydown)="handleTabKeydown($event, tab.id)"
+          >
+            {{ tab.label }}
+          </button>
         }
-      </section>
+      </nav>
 
-      <section
-        class="analytics-section grid gap-8 xl:grid-cols-2"
-        aria-labelledby="adoption-heading"
-      >
-        <div>
+      @if (activeTab() === 'overview') {
+        <section
+          id="analytics-panel-overview"
+          class="workspace-panel"
+          role="tabpanel"
+          aria-labelledby="analytics-tab-overview analytics-status-heading"
+          tabindex="0"
+        >
+          <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p class="page-eyebrow">Observed activity</p>
+              <h2 id="analytics-status-heading" class="text-lg font-bold">{{ scopeLabel }}</h2>
+            </div>
+            <p class="text-xs text-ink-600">
+              {{ report.range.from }}–{{ report.range.to }} · UTC · refreshed
+              {{ timestamp(report.generatedAt) }}
+            </p>
+          </div>
+
+          <dl class="metric-rail">
+            <div>
+              <dt>Active users</dt>
+              <dd>{{ report.summary.activeUsers }}</dd>
+            </div>
+            <div>
+              <dt>Sessions</dt>
+              <dd>{{ report.summary.sessions }}</dd>
+            </div>
+            <div>
+              <dt>Page views</dt>
+              <dd>{{ report.summary.pageViews }}</dd>
+            </div>
+            <div>
+              <dt>Affected sessions</dt>
+              <dd>{{ report.summary.affectedSessionRate }}%</dd>
+            </div>
+          </dl>
+        </section>
+      }
+
+      @if (activeTab() === 'usage') {
+        <div
+          id="analytics-panel-usage"
+          class="workspace-panel"
+          role="tabpanel"
+          aria-labelledby="analytics-tab-usage usage-heading"
+          tabindex="0"
+        >
+          <section class="analytics-section" aria-labelledby="usage-heading">
+            <div class="section-heading">
+              <div>
+                <p class="page-eyebrow">Usage</p>
+                <h2 id="usage-heading" class="text-xl font-bold">Page views by day</h2>
+              </div>
+              <p class="text-xs text-ink-600">Daily authenticated dashboard activity</p>
+            </div>
+
+            @if (report.usage.length) {
+              <div class="overflow-x-auto">
+                <div class="usage-chart" role="img" aria-label="Daily owner dashboard page views">
+                  @for (point of report.usage; track point.day) {
+                    <div
+                      class="usage-column group"
+                      [title]="dayLabel(point.day) + ': ' + point.pageViews + ' page views'"
+                    >
+                      <span class="usage-value">{{ point.pageViews }}</span>
+                      <span class="usage-bar" [style.height.%]="barHeight(point.pageViews)"></span>
+                      <span class="usage-day">{{ dayLabel(point.day) }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <details class="mt-4 border-t border-champagne-200 pt-3">
+                <summary class="cursor-pointer text-xs font-bold text-gold-700">
+                  Accessible data table
+                </summary>
+                <div class="mt-3 overflow-x-auto">
+                  <table class="analytics-table min-w-[36rem]">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Active users</th>
+                        <th>Sessions</th>
+                        <th>Page views</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (point of report.usage; track point.day) {
+                        <tr>
+                          <td>{{ dayLabel(point.day) }}</td>
+                          <td>{{ point.activeUsers }}</td>
+                          <td>{{ point.sessions }}</td>
+                          <td>{{ point.pageViews }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            } @else {
+              <div class="analytics-empty">
+                <svg lucideActivity class="size-7"></svg>
+                <p>No dashboard activity was recorded in this period.</p>
+              </div>
+            }
+          </section>
+
+          <section
+            class="analytics-section grid gap-8 xl:grid-cols-2"
+            aria-labelledby="adoption-heading"
+          >
+            <div>
+              <div class="section-heading">
+                <div>
+                  <p class="page-eyebrow">Adoption</p>
+                  <h2 id="adoption-heading" class="text-lg font-bold">Most visited areas</h2>
+                </div>
+              </div>
+              <ol class="ranked-list">
+                @for (route of report.routes; track trackName($index, route); let index = $index) {
+                  <li>
+                    <span class="rank">{{ index + 1 }}</span>
+                    <span class="min-w-0 flex-1 truncate font-semibold">{{
+                      label(route.name)
+                    }}</span>
+                    <span class="tabular-nums text-ink-600">{{ route.count }}</span>
+                  </li>
+                } @empty {
+                  <li class="text-ink-600">No route activity yet.</li>
+                }
+              </ol>
+            </div>
+            <div>
+              <div class="section-heading">
+                <div>
+                  <p class="page-eyebrow">Meaningful actions</p>
+                  <h2 class="text-lg font-bold">Feature usage</h2>
+                </div>
+              </div>
+              <ol class="ranked-list">
+                @for (
+                  feature of report.features;
+                  track trackName($index, feature);
+                  let index = $index
+                ) {
+                  <li>
+                    <span class="rank">{{ index + 1 }}</span>
+                    <span class="min-w-0 flex-1 truncate font-semibold">{{
+                      label(feature.name)
+                    }}</span>
+                    <span class="tabular-nums text-ink-600">{{ feature.count }}</span>
+                  </li>
+                } @empty {
+                  <li class="text-ink-600">No feature activity yet.</li>
+                }
+              </ol>
+            </div>
+          </section>
+        </div>
+      }
+
+      @if (activeTab() === 'experience') {
+        <section
+          id="analytics-panel-experience"
+          class="analytics-section workspace-panel"
+          role="tabpanel"
+          aria-labelledby="analytics-tab-experience experience-heading"
+          tabindex="0"
+        >
           <div class="section-heading">
             <div>
-              <p class="page-eyebrow">Adoption</p>
-              <h2 id="adoption-heading" class="text-lg font-bold">Most visited areas</h2>
+              <p class="page-eyebrow">Experience</p>
+              <h2 id="experience-heading" class="text-xl font-bold">Core Web Vitals</h2>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-ink-600">
+              <svg lucideGauge class="size-4"></svg><span>75th percentile</span>
             </div>
           </div>
-          <ol class="ranked-list">
-            @for (route of report.routes; track trackName($index, route); let index = $index) {
-              <li>
-                <span class="rank">{{ index + 1 }}</span>
-                <span class="min-w-0 flex-1 truncate font-semibold">{{ label(route.name) }}</span>
-                <span class="tabular-nums text-ink-600">{{ route.count }}</span>
-              </li>
-            } @empty {
-              <li class="text-ink-600">No route activity yet.</li>
-            }
-          </ol>
-        </div>
-        <div>
-          <div class="section-heading">
-            <div>
-              <p class="page-eyebrow">Meaningful actions</p>
-              <h2 class="text-lg font-bold">Feature usage</h2>
-            </div>
-          </div>
-          <ol class="ranked-list">
-            @for (
-              feature of report.features;
-              track trackName($index, feature);
-              let index = $index
-            ) {
-              <li>
-                <span class="rank">{{ index + 1 }}</span>
-                <span class="min-w-0 flex-1 truncate font-semibold">{{ label(feature.name) }}</span>
-                <span class="tabular-nums text-ink-600">{{ feature.count }}</span>
-              </li>
-            } @empty {
-              <li class="text-ink-600">No feature activity yet.</li>
-            }
-          </ol>
-        </div>
-      </section>
-
-      <section class="analytics-section" aria-labelledby="experience-heading">
-        <div class="section-heading">
-          <div>
-            <p class="page-eyebrow">Experience</p>
-            <h2 id="experience-heading" class="text-xl font-bold">Core Web Vitals</h2>
-          </div>
-          <div class="flex items-center gap-2 text-xs text-ink-600">
-            <svg lucideGauge class="size-4"></svg><span>75th percentile</span>
-          </div>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="analytics-table min-w-[44rem]">
-            <thead>
-              <tr>
-                <th>Area</th>
-                <th>Metric</th>
-                <th>Device</th>
-                <th>p75</th>
-                <th>Samples</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (
-                metric of report.performance;
-                track metric.route + metric.metricName + metric.deviceClass
-              ) {
-                <tr>
-                  <td class="font-semibold">{{ label(metric.route) }}</td>
-                  <td>{{ metric.metricName }}</td>
-                  <td>{{ label(metric.deviceClass) }}</td>
-                  <td class="font-bold tabular-nums" [class]="vitalTone(metric)">
-                    {{ vitalValue(metric) }}
-                  </td>
-                  <td>
-                    {{ metric.sampleCount }}
-                    @if (metric.insufficientSample) {
-                      <span class="ml-1 text-[11px] text-warning-700">Low sample</span>
-                    }
-                  </td>
-                </tr>
-              } @empty {
-                <tr>
-                  <td colspan="5" class="py-8 text-center text-ink-600">
-                    No Web Vital samples yet.
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="analytics-section" aria-labelledby="issues-heading">
-        <div class="section-heading">
-          <div>
-            <p class="page-eyebrow">Issues</p>
-            <h2 id="issues-heading" class="text-xl font-bold">Sanitized error groups</h2>
-          </div>
-          <p class="text-xs text-ink-600">
-            {{ report.summary.frontendErrors }} frontend · {{ report.summary.apiFailures }} API
-          </p>
-        </div>
-        @if (report.errors.length) {
           <div class="overflow-x-auto">
-            <table class="analytics-table min-w-[48rem]">
+            <table class="analytics-table min-w-[44rem]">
               <thead>
                 <tr>
-                  <th>Error</th>
-                  <th>Source</th>
-                  <th>Release</th>
-                  <th>Count</th>
-                  <th>Sessions</th>
-                  <th>First seen</th>
-                  <th>Last seen</th>
+                  <th>Area</th>
+                  <th>Metric</th>
+                  <th>Device</th>
+                  <th>p75</th>
+                  <th>Samples</th>
                 </tr>
               </thead>
               <tbody>
                 @for (
-                  issue of report.errors;
-                  track issue.eventType + issue.errorCode + issue.appRelease
+                  metric of report.performance;
+                  track metric.route + metric.metricName + metric.deviceClass
                 ) {
                   <tr>
-                    <td class="font-semibold">{{ label(issue.errorCode) }}</td>
-                    <td>{{ issue.eventType === 'API_FAILURE' ? 'API request' : 'Browser' }}</td>
-                    <td class="font-mono text-xs">{{ issue.appRelease }}</td>
-                    <td class="tabular-nums">{{ issue.count }}</td>
-                    <td class="tabular-nums">{{ issue.affectedSessions }}</td>
-                    <td>{{ timestamp(issue.firstSeenAt) }}</td>
-                    <td>{{ timestamp(issue.lastSeenAt) }}</td>
+                    <td class="font-semibold">{{ label(metric.route) }}</td>
+                    <td>{{ metric.metricName }}</td>
+                    <td>{{ label(metric.deviceClass) }}</td>
+                    <td class="font-bold tabular-nums" [class]="vitalTone(metric)">
+                      {{ vitalValue(metric) }}
+                    </td>
+                    <td>
+                      {{ metric.sampleCount }}
+                      @if (metric.insufficientSample) {
+                        <span class="ml-1 text-[11px] text-warning-700">Low sample</span>
+                      }
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="5" class="py-8 text-center text-ink-600">
+                      No Web Vital samples yet.
+                    </td>
                   </tr>
                 }
               </tbody>
             </table>
           </div>
-        } @else {
-          <div class="analytics-empty text-success-700">
-            <svg lucideShieldCheck class="size-7"></svg>
-            <p>No browser or API failures were recorded in this period.</p>
+        </section>
+      }
+
+      @if (activeTab() === 'issues') {
+        <section
+          id="analytics-panel-issues"
+          class="analytics-section workspace-panel"
+          role="tabpanel"
+          aria-labelledby="analytics-tab-issues issues-heading"
+          tabindex="0"
+        >
+          <div class="section-heading">
+            <div>
+              <p class="page-eyebrow">Issues</p>
+              <h2 id="issues-heading" class="text-xl font-bold">Sanitized error groups</h2>
+            </div>
+            <p class="text-xs text-ink-600">
+              {{ report.summary.frontendErrors }} frontend · {{ report.summary.apiFailures }} API
+            </p>
           </div>
-        }
-      </section>
+          @if (report.errors.length) {
+            <div class="overflow-x-auto">
+              <table class="analytics-table min-w-[48rem]">
+                <thead>
+                  <tr>
+                    <th>Error</th>
+                    <th>Source</th>
+                    <th>Release</th>
+                    <th>Count</th>
+                    <th>Sessions</th>
+                    <th>First seen</th>
+                    <th>Last seen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (
+                    issue of report.errors;
+                    track issue.eventType + issue.errorCode + issue.appRelease
+                  ) {
+                    <tr>
+                      <td class="font-semibold">{{ label(issue.errorCode) }}</td>
+                      <td>{{ issue.eventType === 'API_FAILURE' ? 'API request' : 'Browser' }}</td>
+                      <td class="font-mono text-xs">{{ issue.appRelease }}</td>
+                      <td class="tabular-nums">{{ issue.count }}</td>
+                      <td class="tabular-nums">{{ issue.affectedSessions }}</td>
+                      <td>{{ timestamp(issue.firstSeenAt) }}</td>
+                      <td>{{ timestamp(issue.lastSeenAt) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <div class="analytics-empty text-success-700">
+              <svg lucideShieldCheck class="size-7"></svg>
+              <p>No browser or API failures were recorded in this period.</p>
+            </div>
+          }
+        </section>
+      }
 
       <footer
         class="mt-7 flex items-start gap-3 border-t border-champagne-300 pt-4 text-xs leading-5 text-ink-600"

@@ -46,6 +46,8 @@ interface PaymentForm {
   notes: string;
 }
 
+type FinanceTab = 'overview' | 'payments' | 'expenses';
+
 @Component({
   selector: 'app-finance',
   imports: [
@@ -62,6 +64,12 @@ interface PaymentForm {
   styleUrl: './finance.css',
 })
 export class FinancePage implements OnInit {
+  readonly tabs: ReadonlyArray<{ id: FinanceTab; label: string }> = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'payments', label: 'Payments' },
+    { id: 'expenses', label: 'Expenses' },
+  ];
+  readonly activeTab = signal<FinanceTab>('overview');
   readonly categories: Array<{ value: ExpenseCategory; label: string }> = [
     { value: 'INFRASTRUCTURE', label: 'Infrastructure' },
     { value: 'SOFTWARE', label: 'Software' },
@@ -141,11 +149,13 @@ export class FinancePage implements OnInit {
   }
 
   openExpense(): void {
+    this.activeTab.set('expenses');
     this.expenseForm = this.emptyExpense();
     this.expenseOpen.set(true);
   }
 
   openPayment(): void {
+    this.activeTab.set('payments');
     this.paymentForm = this.emptyPayment();
     this.paymentOpen.set(true);
   }
@@ -253,6 +263,30 @@ export class FinancePage implements OnInit {
   barHeight(value: number): string {
     if (!value) return '0%';
     return `${Math.max(3, (value / this.chartMaximum()) * 100)}%`;
+  }
+
+  selectTab(tab: FinanceTab): void {
+    this.activeTab.set(tab);
+  }
+
+  handleTabKeydown(event: KeyboardEvent, current: FinanceTab): void {
+    const currentIndex = this.tabs.findIndex((tab) => tab.id === current);
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % this.tabs.length;
+    else if (event.key === 'ArrowLeft') {
+      nextIndex = (currentIndex - 1 + this.tabs.length) % this.tabs.length;
+    } else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = this.tabs.length - 1;
+    else return;
+
+    event.preventDefault();
+    const next = this.tabs[nextIndex];
+    if (!next) return;
+    this.activeTab.set(next.id);
+    const buttons = (
+      event.currentTarget as HTMLElement
+    ).parentElement?.querySelectorAll<HTMLElement>('[role="tab"]');
+    buttons?.[nextIndex]?.focus();
   }
 
   get canAdminister(): boolean {

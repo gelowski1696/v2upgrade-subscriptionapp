@@ -10,9 +10,20 @@ test('shows privacy-safe website analytics to super administrators', async ({ pa
   await expect(page.getByRole('heading', { name: 'API operational' })).toBeVisible();
   await expect(page.getByText('api1234', { exact: true })).toBeVisible();
   await expect(page.getByText('web1234', { exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+
+  await page.getByRole('tab', { name: 'Usage' }).click();
   await expect(page.getByRole('heading', { name: 'Page views by day' })).toBeVisible();
   await expect(page.getByText('Sales', { exact: true }).first()).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Experience' }).click();
   await expect(page.getByText('Low sample').first()).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Experience' }).press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Issues' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Unhandled Frontend Error')).toBeVisible();
   await expect(page.getByText(/exclude usernames, emails, IP addresses/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
@@ -55,6 +66,7 @@ test('explains partial collection and privacy-suppressed details', async ({ page
 
   await expect(page.getByText(/enabled for 2 of 4 active clients/)).toBeVisible();
   await expect(page.getByText(/fewer than 3 active users/)).toBeVisible();
+  await page.getByRole('tab', { name: 'Usage' }).click();
   await expect(page.getByText('No route activity yet.')).toBeVisible();
 });
 

@@ -12,6 +12,17 @@ test('shows subscription finance and records an expense', async ({ page }, testI
   await expect(page.getByRole('heading', { name: 'Revenue versus expenses' })).toBeVisible();
   await expect(page.getByText('Standard', { exact: true }).first()).toBeVisible();
 
+  const overviewTab = page.getByRole('tab', { name: 'Overview' });
+  const paymentsTab = page.getByRole('tab', { name: 'Payments' });
+  const expensesTab = page.getByRole('tab', { name: 'Expenses' });
+  await expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+  await paymentsTab.click();
+  await expect(page.getByRole('heading', { name: 'Recent payments' })).toBeVisible();
+  await expect(paymentsTab).toHaveAttribute('aria-selected', 'true');
+  await paymentsTab.press('ArrowRight');
+  await expect(expensesTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('heading', { name: 'Expense ledger' })).toBeVisible();
+
   await page.getByRole('button', { name: 'Add expense' }).first().click();
   await page.getByLabel('Description *').fill('Cloud backup');
   await page.getByLabel('Category *').selectOption('INFRASTRUCTURE');
