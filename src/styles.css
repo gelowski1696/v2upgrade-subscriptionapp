@@ -212,6 +212,10 @@
     @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-champagne-300 bg-white px-4 text-sm font-semibold text-ink-800 transition active:bg-champagne-200 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
+  .danger-button {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-danger-700 px-4 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
   .icon-button {
     @apply inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-champagne-300 bg-white text-ink-600 transition active:bg-champagne-200 disabled:opacity-40;
   }

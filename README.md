@@ -48,8 +48,9 @@ until an administrator explicitly disables them.
 ## Subscription finance
 
 The **Finance** workspace reports actual recorded collections rather than projected subscription
-value. Operators can record payments. `SUPER_ADMIN` and `ADMIN` accounts can also add or remove
-expenses. Period totals use UTC dates and currently report in PHP.
+value. Operators can record payments. `SUPER_ADMIN` and `ADMIN` accounts can add or remove
+expenses and void incorrect payments with a required reason. Voided payments remain in the audit
+history and no longer count toward revenue. Period totals use UTC dates and currently report in PHP.
 
 ## Android setup
 

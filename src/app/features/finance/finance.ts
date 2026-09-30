@@ -1,7 +1,9 @@
 import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
+  LucideBan,
   LucideChartColumn,
+  LucideCircleAlert,
   LucideCircleDollarSign,
   LucidePlus,
   LucideReceiptText,
@@ -47,12 +49,17 @@ interface PaymentForm {
 }
 
 type FinanceTab = 'overview' | 'payments' | 'expenses';
+type PaymentRecord = FinanceOverview['recentPayments'][number];
+type ConfirmationState =
+  { kind: 'expense'; expense: ExpenseRecord } | { kind: 'payment'; payment: PaymentRecord };
 
 @Component({
   selector: 'app-finance',
   imports: [
     FormsModule,
+    LucideBan,
     LucideChartColumn,
+    LucideCircleAlert,
     LucideCircleDollarSign,
     LucidePlus,
     LucideReceiptText,
@@ -87,6 +94,7 @@ export class FinancePage implements OnInit {
   readonly error = signal('');
   readonly expenseOpen = signal(false);
   readonly paymentOpen = signal(false);
+  readonly confirmation = signal<ConfirmationState | null>(null);
   readonly chart = computed(() => this.chartPoints(this.overview()?.daily ?? []));
   readonly chartMaximum = computed(() =>
     Math.max(1, ...this.chart().flatMap((point) => [point.revenue, point.expenses])),
@@ -96,6 +104,7 @@ export class FinancePage implements OnInit {
   to = '';
   expenseForm = this.emptyExpense();
   paymentForm = this.emptyPayment();
+  voidReason = '';
 
   constructor(
     private readonly api: ApiService,
@@ -223,17 +232,47 @@ export class FinancePage implements OnInit {
     }
   }
 
-  async deleteExpense(expense: ExpenseRecord): Promise<void> {
+  requestDeleteExpense(expense: ExpenseRecord): void {
     if (!this.canAdminister || this.saving()) return;
-    if (!window.confirm(`Delete the expense “${expense.description}”?`)) return;
+    this.voidReason = '';
+    this.confirmation.set({ kind: 'expense', expense });
+  }
+
+  requestVoidPayment(payment: PaymentRecord): void {
+    if (!this.canAdminister || this.saving() || payment.status === 'VOIDED') return;
+    this.voidReason = '';
+    this.confirmation.set({ kind: 'payment', payment });
+  }
+
+  closeConfirmation(): void {
+    if (this.saving()) return;
+    this.confirmation.set(null);
+    this.voidReason = '';
+  }
+
+  async confirmDestructiveAction(): Promise<void> {
+    const confirmation = this.confirmation();
+    if (!confirmation || !this.validConfirmation || this.saving()) return;
     this.saving.set(true);
     try {
-      await firstValueFrom(this.api.delete(`/finance/expenses/${expense.id}`));
-      this.toasts.show('Expense deleted', 'success');
+      if (confirmation.kind === 'expense') {
+        await firstValueFrom(this.api.delete(`/finance/expenses/${confirmation.expense.id}`));
+        this.toasts.show('Expense deleted', 'success');
+      } else {
+        await firstValueFrom(
+          this.api.post(`/finance/payments/${confirmation.payment.id}/void`, {
+            reason: this.voidReason.trim(),
+          }),
+        );
+        this.toasts.show('Payment voided', 'success');
+      }
+      this.confirmation.set(null);
+      this.voidReason = '';
       await this.load();
     } catch (error) {
+      const subject = confirmation.kind === 'expense' ? 'Expense' : 'Payment';
       this.toasts.show(
-        'Expense could not be deleted',
+        `${subject} could not be updated`,
         'error',
         apiErrorMessage(error, 'Try again.'),
       );
@@ -307,6 +346,11 @@ export class FinancePage implements OnInit {
       Number(this.paymentForm.amount) > 0 &&
       Boolean(this.paymentForm.paidAt)
     );
+  }
+
+  get validConfirmation(): boolean {
+    const confirmation = this.confirmation();
+    return confirmation?.kind === 'payment' ? this.voidReason.trim().length >= 3 : true;
   }
 
   private chartPoints(rows: FinanceOverview['daily']): ChartPoint[] {

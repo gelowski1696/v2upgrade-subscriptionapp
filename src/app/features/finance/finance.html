@@ -220,9 +220,17 @@
           </div>
           <div class="data-list">
             @for (payment of report.recentPayments; track payment.id) {
-              <div class="data-row grid-cols-[1fr_auto]">
+              <div
+                class="data-row grid-cols-[1fr_auto]"
+                [class.opacity-70]="payment.status === 'VOIDED'"
+              >
                 <div class="min-w-0">
-                  <p class="truncate text-sm font-bold">{{ payment.client.businessName }}</p>
+                  <div class="flex min-w-0 items-center gap-2">
+                    <p class="truncate text-sm font-bold">{{ payment.client.businessName }}</p>
+                    @if (payment.status === 'VOIDED') {
+                      <span class="status-chip bg-champagne-200 text-ink-600">Voided</span>
+                    }
+                  </div>
                   <p class="mt-1 truncate text-xs text-ink-600">
                     {{ payment.plan.name }} · {{ date(payment.paidAt) }}
                   </p>
@@ -231,10 +239,36 @@
                       Ref {{ payment.reference }}
                     </p>
                   }
+                  @if (payment.status === 'VOIDED') {
+                    <p class="mt-1 truncate text-[11px] text-danger-700">
+                      @if (payment.voidedAt) {
+                        Voided {{ date(payment.voidedAt) }} ·
+                      }
+                      {{ payment.voidReason }}
+                    </p>
+                  }
                 </div>
-                <p class="text-sm font-bold tabular-nums text-success-700">
-                  {{ money(payment.amount) }}
-                </p>
+                <div class="flex items-center gap-2">
+                  <p
+                    class="text-sm font-bold tabular-nums"
+                    [class.text-success-700]="payment.status === 'POSTED'"
+                    [class.text-ink-400]="payment.status === 'VOIDED'"
+                    [class.line-through]="payment.status === 'VOIDED'"
+                  >
+                    {{ money(payment.amount) }}
+                  </p>
+                  @if (canAdminister && payment.status === 'POSTED') {
+                    <button
+                      type="button"
+                      class="flex size-10 items-center justify-center rounded-md text-ink-400 transition hover:bg-danger-100 hover:text-danger-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger-700"
+                      [attr.aria-label]="'Void payment for ' + payment.client.businessName"
+                      [disabled]="saving()"
+                      (click)="requestVoidPayment(payment)"
+                    >
+                      <svg lucideBan class="size-4"></svg>
+                    </button>
+                  }
+                </div>
               </div>
             } @empty {
               <div class="empty-state min-h-44">
@@ -294,9 +328,9 @@
                     <button
                       type="button"
                       class="flex size-10 items-center justify-center text-ink-400 hover:text-danger-700"
-                      aria-label="Delete expense"
+                      [attr.aria-label]="'Delete expense ' + expense.description"
                       [disabled]="saving()"
-                      (click)="deleteExpense(expense)"
+                      (click)="requestDeleteExpense(expense)"
                     >
                       <svg lucideTrash2 class="size-4"></svg>
                     </button>
@@ -433,6 +467,104 @@
           </button>
         </footer>
       </form>
+    </section>
+  </div>
+}
+
+@if (confirmation(); as item) {
+  <div class="confirmation-backdrop" (click)="closeConfirmation()">
+    <section
+      appDialogFocus
+      class="confirmation-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="confirmation-title"
+      aria-describedby="confirmation-description"
+      (dialogEscape)="closeConfirmation()"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="confirmation-mark" aria-hidden="true">
+        <svg lucideCircleAlert class="size-6"></svg>
+      </div>
+      <div class="min-w-0">
+        <p class="page-eyebrow">Finance record</p>
+        <h2 id="confirmation-title" class="text-xl font-bold text-ink-950">
+          {{ item.kind === 'expense' ? 'Delete expense?' : 'Void payment?' }}
+        </h2>
+        <p id="confirmation-description" class="mt-2 text-sm leading-6 text-ink-600">
+          @if (item.kind === 'expense') {
+            This removes the expense from the ledger and recalculates finance totals. This action
+            cannot be undone.
+          } @else {
+            This reverses the payment from revenue totals while preserving it in the audit history.
+          }
+        </p>
+      </div>
+
+      <div class="confirmation-record">
+        @if (item.kind === 'expense') {
+          <div class="min-w-0">
+            <p class="truncate text-sm font-bold">{{ item.expense.description }}</p>
+            <p class="mt-1 text-xs text-ink-600">
+              {{ categoryLabel(item.expense.category) }} · {{ date(item.expense.incurredAt) }}
+            </p>
+          </div>
+          <p class="shrink-0 text-sm font-bold tabular-nums text-danger-700">
+            {{ money(item.expense.amount) }}
+          </p>
+        } @else {
+          <div class="min-w-0">
+            <p class="truncate text-sm font-bold">{{ item.payment.client.businessName }}</p>
+            <p class="mt-1 text-xs text-ink-600">
+              {{ item.payment.plan.name }} · {{ date(item.payment.paidAt) }}
+            </p>
+          </div>
+          <p class="shrink-0 text-sm font-bold tabular-nums text-success-700">
+            {{ money(item.payment.amount) }}
+          </p>
+        }
+      </div>
+
+      @if (item.kind === 'payment') {
+        <label class="mt-5 block">
+          <span class="field-label">Reason for voiding *</span>
+          <textarea
+            name="voidReason"
+            class="field-control min-h-24 py-3"
+            minlength="3"
+            maxlength="250"
+            placeholder="Example: Duplicate payment entry"
+            [(ngModel)]="voidReason"
+            required
+          ></textarea>
+          <span class="mt-1.5 block text-xs text-ink-400">Minimum 3 characters.</span>
+        </label>
+      }
+
+      <footer class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <button
+          data-dialog-initial-focus
+          type="button"
+          class="secondary-button"
+          [disabled]="saving()"
+          (click)="closeConfirmation()"
+        >
+          {{ item.kind === 'expense' ? 'Keep expense' : 'Keep payment' }}
+        </button>
+        <button
+          type="button"
+          class="danger-button"
+          [disabled]="saving() || !validConfirmation"
+          (click)="confirmDestructiveAction()"
+        >
+          @if (item.kind === 'expense') {
+            <svg lucideTrash2 class="size-4"></svg>
+          } @else {
+            <svg lucideBan class="size-4"></svg>
+          }
+          {{ saving() ? 'Working…' : item.kind === 'expense' ? 'Delete expense' : 'Void payment' }}
+        </button>
+      </footer>
     </section>
   </div>
 }

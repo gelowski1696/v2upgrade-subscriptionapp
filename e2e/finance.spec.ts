@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 
-test('shows subscription finance and records an expense', async ({ page }, testInfo) => {
+test('manages subscription finance with safe confirmations', async ({ page }, testInfo) => {
   await mockApi(page);
   await signIn(page);
   await page.locator('a[href="/finance"]:visible').click();
@@ -19,9 +19,28 @@ test('shows subscription finance and records an expense', async ({ page }, testI
   await paymentsTab.click();
   await expect(page.getByRole('heading', { name: 'Recent payments' })).toBeVisible();
   await expect(paymentsTab).toHaveAttribute('aria-selected', 'true');
+
+  await page.getByRole('button', { name: 'Void payment for Demo Store' }).click();
+  const voidDialog = page.getByRole('alertdialog', { name: 'Void payment?' });
+  await expect(voidDialog).toBeVisible();
+  await expect(voidDialog.getByRole('button', { name: 'Void payment' })).toBeDisabled();
+  await voidDialog.getByLabel('Reason for voiding *').fill('Duplicate payment entry');
+  await voidDialog.getByRole('button', { name: 'Void payment' }).click();
+  await expect(page.getByRole('status').getByText('Payment voided')).toBeVisible();
+
   await paymentsTab.press('ArrowRight');
   await expect(expensesTab).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', { name: 'Expense ledger' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Delete expense Cloud hosting' }).click();
+  const deleteDialog = page.getByRole('alertdialog', { name: 'Delete expense?' });
+  await expect(deleteDialog).toBeVisible();
+  await expect(deleteDialog.getByRole('button', { name: 'Keep expense' })).toBeFocused();
+  await deleteDialog.getByRole('button', { name: 'Keep expense' }).click();
+  await expect(deleteDialog).toBeHidden();
+  await page.getByRole('button', { name: 'Delete expense Cloud hosting' }).click();
+  await deleteDialog.getByRole('button', { name: 'Delete expense' }).click();
+  await expect(page.getByRole('status').getByText('Expense deleted')).toBeVisible();
 
   await page.getByRole('button', { name: 'Add expense' }).first().click();
   await page.getByLabel('Description *').fill('Cloud backup');
@@ -88,6 +107,21 @@ async function mockApi(page: Page): Promise<void> {
       await route.fulfill(json(expense()));
       return;
     }
+    if (/\/finance\/expenses\/[^/]+$/.test(path) && request.method() === 'DELETE') {
+      await route.fulfill(json({ deleted: true }));
+      return;
+    }
+    if (/\/finance\/payments\/[^/]+\/void$/.test(path) && request.method() === 'POST') {
+      await route.fulfill(
+        json({
+          id: 'payment-1',
+          status: 'VOIDED',
+          voidedAt: '2026-09-30T01:00:00.000Z',
+          voidReason: 'Duplicate payment entry',
+        }),
+      );
+      return;
+    }
     if (path.endsWith('/subscriptions')) {
       await route.fulfill(
         json({ items: [subscription()], page: 1, pageSize: 100, total: 1, totalPages: 1 }),
@@ -127,6 +161,9 @@ function financeOverview() {
         reference: 'RECEIPT-1',
         paidAt: '2026-09-30T00:00:00.000Z',
         notes: null,
+        status: 'POSTED',
+        voidedAt: null,
+        voidReason: null,
         client: { id: 'client-1', businessName: 'Demo Store' },
         plan: { id: 'plan-1', name: 'Standard' },
       },

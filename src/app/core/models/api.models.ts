@@ -151,6 +151,9 @@ export interface FinanceOverview {
     reference: string | null;
     paidAt: string;
     notes: string | null;
+    status: 'POSTED' | 'VOIDED';
+    voidedAt: string | null;
+    voidReason: string | null;
     client: { id: string; businessName: string };
     plan: { id: string; name: string };
   }>;
