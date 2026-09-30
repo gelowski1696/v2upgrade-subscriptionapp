@@ -15,6 +15,7 @@ import { apiErrorMessage } from '../../core/api/error-message';
 import { SessionStore } from '../../core/auth/session.store';
 import type { ApiPage, ClientRecord, ClientStatus } from '../../core/models/api.models';
 import { ToastService } from '../../core/notifications/toast.service';
+import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog';
 import { DialogFocusDirective } from '../../shared/dialog-focus.directive';
 
 interface ClientForm {
@@ -39,6 +40,7 @@ interface ClientForm {
     LucidePlus,
     LucideSearch,
     LucideX,
+    ConfirmDialogComponent,
     DialogFocusDirective,
   ],
   templateUrl: './clients.html',
@@ -48,6 +50,7 @@ export class ClientsPage implements OnInit, OnDestroy {
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly editorOpen = signal(false);
+  readonly archiveConfirmationOpen = signal(false);
   readonly total = signal(0);
   readonly totalPages = signal(1);
   readonly error = signal('');
@@ -140,15 +143,14 @@ export class ClientsPage implements OnInit, OnDestroy {
     if (!this.saving()) this.editorOpen.set(false);
   }
 
-  async save(): Promise<void> {
+  async save(archiveConfirmed = false): Promise<void> {
     if (!this.form.code.trim() || !this.form.businessName.trim()) return;
     if (
       this.editing?.status !== 'ARCHIVED' &&
       this.form.status === 'ARCHIVED' &&
-      !window.confirm(
-        `Archive ${this.editing?.businessName ?? this.form.businessName}? The client will no longer appear in active lists.`,
-      )
+      !archiveConfirmed
     ) {
+      this.archiveConfirmationOpen.set(true);
       return;
     }
     this.saving.set(true);
@@ -179,6 +181,7 @@ export class ClientsPage implements OnInit, OnDestroy {
           }),
         );
       }
+      this.archiveConfirmationOpen.set(false);
       this.editorOpen.set(false);
       this.toasts.show(this.editing ? 'Client updated' : 'Client added', 'success');
       await this.load();

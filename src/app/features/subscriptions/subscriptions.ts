@@ -24,6 +24,7 @@ import type {
   SubscriptionStatus,
 } from '../../core/models/api.models';
 import { ToastService } from '../../core/notifications/toast.service';
+import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog';
 import { DialogFocusDirective } from '../../shared/dialog-focus.directive';
 import {
   FEATURE_MOD_GROUPS,
@@ -41,6 +42,14 @@ interface SubscriptionForm {
   notes: string;
 }
 
+type SubscriptionAction = 'activate' | 'suspend' | 'reactivate' | 'cancel' | 'renew';
+type ConfirmedSubscriptionAction = Extract<SubscriptionAction, 'suspend' | 'cancel'>;
+
+interface SubscriptionConfirmation {
+  subscription: SubscriptionRecord;
+  action: ConfirmedSubscriptionAction;
+}
+
 @Component({
   selector: 'app-subscriptions',
   imports: [
@@ -55,6 +64,7 @@ interface SubscriptionForm {
     LucideShieldCheck,
     LucideX,
     LucideXCircle,
+    ConfirmDialogComponent,
     DialogFocusDirective,
   ],
   templateUrl: './subscriptions.html',
@@ -68,6 +78,7 @@ export class SubscriptionsPage implements OnInit {
   readonly saving = signal(false);
   readonly editorOpen = signal(false);
   readonly selected = signal<SubscriptionRecord | null>(null);
+  readonly actionConfirmation = signal<SubscriptionConfirmation | null>(null);
   readonly total = signal(0);
   readonly totalPages = signal(1);
   search = '';
@@ -203,35 +214,41 @@ export class SubscriptionsPage implements OnInit {
     }
   }
 
-  async action(
+  async action(subscription: SubscriptionRecord, action: SubscriptionAction): Promise<void> {
+    if (action === 'cancel' || action === 'suspend') {
+      this.actionConfirmation.set({ subscription, action });
+      return;
+    }
+    await this.performAction(subscription, action);
+  }
+
+  async confirmAction(): Promise<void> {
+    const confirmation = this.actionConfirmation();
+    if (!confirmation || this.saving()) return;
+    await this.performAction(confirmation.subscription, confirmation.action);
+  }
+
+  confirmationTitle(action: ConfirmedSubscriptionAction): string {
+    return action === 'cancel' ? 'Cancel subscription?' : 'Suspend subscription?';
+  }
+
+  confirmationDescription(action: ConfirmedSubscriptionAction): string {
+    return action === 'cancel'
+      ? 'This permanently ends the subscription and it cannot be reactivated.'
+      : 'POS access will stop until an administrator reactivates the subscription.';
+  }
+
+  private async performAction(
     subscription: SubscriptionRecord,
-    action: 'activate' | 'suspend' | 'reactivate' | 'cancel' | 'renew',
+    action: SubscriptionAction,
   ): Promise<void> {
-    if (action === 'cancel') {
-      if (
-        !window.confirm(
-          `Cancel the subscription for ${subscription.client.businessName}? This cannot be reactivated.`,
-        )
-      )
-        return;
-    }
-    if (action === 'suspend') {
-      if (
-        !window.confirm(
-          `Suspend the subscription for ${subscription.client.businessName}? POS access will stop until it is reactivated.`,
-        )
-      )
-        return;
-    }
     this.saving.set(true);
     try {
       await firstValueFrom(
         this.api.post<SubscriptionRecord>(`/subscriptions/${subscription.id}/${action}`, {}),
       );
-      this.toasts.show(
-        `Subscription ${action === 'reactivate' ? 'reactivated' : action + 'd'}`,
-        'success',
-      );
+      this.actionConfirmation.set(null);
+      this.toasts.show(`Subscription ${this.actionPastTense(action)}`, 'success');
       await this.load();
       if (this.selected()) {
         const refreshed = await firstValueFrom(
@@ -391,6 +408,17 @@ export class SubscriptionsPage implements OnInit {
 
   private isValidDeviceId(value: string): boolean {
     return /^[A-Za-z0-9][A-Za-z0-9._:-]{7,119}$/.test(value.trim());
+  }
+
+  private actionPastTense(action: SubscriptionAction): string {
+    const labels: Record<SubscriptionAction, string> = {
+      activate: 'activated',
+      suspend: 'suspended',
+      reactivate: 'reactivated',
+      cancel: 'cancelled',
+      renew: 'renewed',
+    };
+    return labels[action];
   }
 
   private emptyForm(): SubscriptionForm {

@@ -1,0 +1,64 @@
+<div class="confirm-backdrop" (click)="dismiss()">
+  <section
+    appDialogFocus
+    class="confirm-dialog"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="app-confirm-title"
+    aria-describedby="app-confirm-description"
+    (dialogEscape)="dismiss()"
+    (click)="$event.stopPropagation()"
+  >
+    <div
+      class="confirm-mark"
+      [class.confirm-mark-danger]="tone === 'danger'"
+      [class.confirm-mark-warning]="tone === 'warning'"
+      aria-hidden="true"
+    >
+      <svg lucideTriangleAlert class="size-6"></svg>
+    </div>
+
+    <p class="page-eyebrow">{{ eyebrow }}</p>
+    <h2 id="app-confirm-title" class="text-xl font-bold text-ink-950">{{ title }}</h2>
+    <p id="app-confirm-description" class="mt-2 text-sm leading-6 text-ink-600">
+      {{ description }}
+    </p>
+
+    @if (subject) {
+      <div class="confirm-record">
+        <div class="min-w-0">
+          <p class="truncate text-sm font-bold text-ink-950">{{ subject }}</p>
+          @if (subjectMeta) {
+            <p class="mt-1 truncate text-xs text-ink-600">{{ subjectMeta }}</p>
+          }
+        </div>
+        @if (subjectValue) {
+          <p class="shrink-0 text-sm font-bold text-ink-800">{{ subjectValue }}</p>
+        }
+      </div>
+    }
+
+    <ng-content></ng-content>
+
+    <footer class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <button
+        data-dialog-initial-focus
+        type="button"
+        class="secondary-button"
+        [disabled]="busy"
+        (click)="dismiss()"
+      >
+        {{ cancelLabel }}
+      </button>
+      <button
+        type="button"
+        [class.danger-button]="tone === 'danger'"
+        [class.primary-button]="tone === 'warning'"
+        [disabled]="busy || confirmDisabled"
+        (click)="accept()"
+      >
+        {{ busy ? workingLabel : confirmLabel }}
+      </button>
+    </footer>
+  </section>
+</div>

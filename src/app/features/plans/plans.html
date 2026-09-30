@@ -360,3 +360,18 @@
     </section>
   </div>
 }
+
+@if (archiveConfirmation(); as archivePlan) {
+  <app-confirm-dialog
+    eyebrow="Plan catalog"
+    title="Archive plan?"
+    description="This plan will no longer be available for new subscriptions. Existing subscriptions keep their current plan version."
+    [subject]="archivePlan.name"
+    [subjectMeta]="archivePlan.code"
+    confirmLabel="Archive plan"
+    cancelLabel="Keep plan available"
+    [busy]="saving()"
+    (accepted)="confirmArchive()"
+    (dismissed)="archiveConfirmation.set(null)"
+  />
+}

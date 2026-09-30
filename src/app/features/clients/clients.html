@@ -268,3 +268,18 @@
     </section>
   </div>
 }
+
+@if (archiveConfirmationOpen()) {
+  <app-confirm-dialog
+    eyebrow="Client status"
+    title="Archive client?"
+    description="The client will no longer appear in active lists. You can still find the record with the Archived filter."
+    [subject]="editing?.businessName || form.businessName"
+    [subjectMeta]="editing?.code || form.code"
+    confirmLabel="Archive client"
+    cancelLabel="Keep client active"
+    [busy]="saving()"
+    (accepted)="save(true)"
+    (dismissed)="archiveConfirmationOpen.set(false)"
+  />
+}

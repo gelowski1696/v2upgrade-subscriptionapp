@@ -22,6 +22,7 @@ import type {
   PlanVersionRecord,
 } from '../../core/models/api.models';
 import { ToastService } from '../../core/notifications/toast.service';
+import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog';
 import { DialogFocusDirective } from '../../shared/dialog-focus.directive';
 import {
   FEATURE_MOD_GROUPS,
@@ -58,6 +59,7 @@ interface PlanForm {
     LucideSearch,
     LucideUpload,
     LucideX,
+    ConfirmDialogComponent,
     DialogFocusDirective,
   ],
   templateUrl: './plans.html',
@@ -68,6 +70,7 @@ export class PlansPage implements OnInit {
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly editorOpen = signal(false);
+  readonly archiveConfirmation = signal<PlanRecord | null>(null);
   readonly total = signal(0);
   readonly totalPages = signal(1);
   search = '';
@@ -222,20 +225,25 @@ export class PlansPage implements OnInit {
     }
   }
 
-  async archive(plan: PlanRecord): Promise<void> {
-    if (
-      !window.confirm(
-        `Archive ${plan.name}? It will no longer be available for new subscriptions. Existing subscriptions are not changed.`,
-      )
-    )
-      return;
+  archive(plan: PlanRecord): void {
+    if (this.saving()) return;
+    this.archiveConfirmation.set(plan);
+  }
+
+  async confirmArchive(): Promise<void> {
+    const plan = this.archiveConfirmation();
+    if (!plan || this.saving()) return;
+    this.saving.set(true);
     try {
       await firstValueFrom(this.api.post(`/plans/${plan.id}/archive`));
+      this.archiveConfirmation.set(null);
       this.editorOpen.set(false);
       this.toasts.show(`${plan.name} archived`, 'success');
       await this.load();
     } catch (error) {
       this.toasts.show('Plan could not be archived', 'error', apiErrorMessage(error, 'Try again.'));
+    } finally {
+      this.saving.set(false);
     }
   }
 

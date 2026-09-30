@@ -258,6 +258,23 @@
   </div>
 }
 
+@if (actionConfirmation(); as confirmation) {
+  <app-confirm-dialog
+    eyebrow="Subscription status"
+    [title]="confirmationTitle(confirmation.action)"
+    [description]="confirmationDescription(confirmation.action)"
+    [subject]="confirmation.subscription.client.businessName"
+    [subjectMeta]="confirmation.subscription.planVersion.plan.name"
+    [subjectValue]="money(confirmation.subscription)"
+    [confirmLabel]="confirmation.action === 'cancel' ? 'Cancel subscription' : 'Suspend access'"
+    [cancelLabel]="confirmation.action === 'cancel' ? 'Keep subscription' : 'Keep access active'"
+    [tone]="confirmation.action === 'cancel' ? 'danger' : 'warning'"
+    [busy]="saving()"
+    (accepted)="confirmAction()"
+    (dismissed)="actionConfirmation.set(null)"
+  />
+}
+
 @if (selected(); as subscription) {
   <div class="sheet-backdrop" (click)="selected.set(null)">
     <section
