@@ -23,6 +23,9 @@
       <a routerLink="/subscriptions" routerLinkActive="sidebar-link-active" class="sidebar-link">
         <svg lucideCreditCard class="size-5"></svg><span>Subscriptions</span>
       </a>
+      <a routerLink="/finance" routerLinkActive="sidebar-link-active" class="sidebar-link">
+        <svg lucideChartColumn class="size-5"></svg><span>Finance</span>
+      </a>
       @if (session.hasAnyRole('SUPER_ADMIN')) {
         <a routerLink="/web-analytics" routerLinkActive="sidebar-link-active" class="sidebar-link">
           <svg lucideActivity class="size-5"></svg><span>Web analytics</span>
@@ -101,8 +104,8 @@
     >
       <div
         class="mx-auto grid h-[68px] max-w-xl"
-        [class.grid-cols-5]="session.hasAnyRole('SUPER_ADMIN')"
-        [class.grid-cols-4]="!session.hasAnyRole('SUPER_ADMIN')"
+        [class.grid-cols-6]="session.hasAnyRole('SUPER_ADMIN')"
+        [class.grid-cols-5]="!session.hasAnyRole('SUPER_ADMIN')"
       >
         <a
           routerLink="/dashboard"
@@ -131,6 +134,13 @@
           class="flex min-w-0 flex-col items-center justify-center gap-1 text-[10px] font-semibold"
         >
           <svg lucideCreditCard class="size-5"></svg><span>Subscriptions</span>
+        </a>
+        <a
+          routerLink="/finance"
+          routerLinkActive="text-gold-400"
+          class="flex min-w-0 flex-col items-center justify-center gap-1 text-[10px] font-semibold"
+        >
+          <svg lucideChartColumn class="size-5"></svg><span>Finance</span>
         </a>
         @if (session.hasAnyRole('SUPER_ADMIN')) {
           <a

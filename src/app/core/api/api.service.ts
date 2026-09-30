@@ -36,6 +36,10 @@ export class ApiService {
     return this.http.patch<T>(`${this.baseUrl()}${path}`, body);
   }
 
+  delete<T>(path: string): Observable<T> {
+    return this.http.delete<T>(`${this.baseUrl()}${path}`);
+  }
+
   setBaseUrl(value: string): void {
     this.config.setBaseUrl(value);
   }

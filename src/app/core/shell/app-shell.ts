@@ -3,6 +3,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import {
   LucideActivity,
   LucideBuilding2,
+  LucideChartColumn,
   LucideCreditCard,
   LucideLayoutDashboard,
   LucideLogOut,
@@ -22,6 +23,7 @@ import { RuntimeConfigService } from '../config/runtime-config';
     RouterLink,
     RouterLinkActive,
     LucideBuilding2,
+    LucideChartColumn,
     LucideCreditCard,
     LucideLayoutDashboard,
     LucideLogOut,

@@ -1,0 +1,485 @@
+<div class="page-shell">
+  <header class="page-heading flex-wrap">
+    <div>
+      <p class="page-eyebrow">Subscription finance</p>
+      <h1 class="page-title">Revenue and expenses</h1>
+      <p class="page-subtitle">Collected subscription payments and operating costs.</p>
+    </div>
+    <div class="flex gap-2">
+      <button type="button" class="secondary-button" (click)="openPayment()">
+        <svg lucideCircleDollarSign class="size-4"></svg><span>Record payment</span>
+      </button>
+      @if (canAdminister) {
+        <button type="button" class="primary-button" (click)="openExpense()">
+          <svg lucidePlus class="size-4"></svg><span>Add expense</span>
+        </button>
+      }
+    </div>
+  </header>
+
+  <section
+    class="mb-5 flex flex-wrap items-end gap-3 border-y border-champagne-300 bg-white px-4 py-3 sm:rounded-md sm:border"
+  >
+    <div class="flex gap-2 overflow-x-auto">
+      <button type="button" class="secondary-button min-h-10 px-3" (click)="setPreset(30)">
+        30 days
+      </button>
+      <button type="button" class="secondary-button min-h-10 px-3" (click)="setPreset(90)">
+        90 days
+      </button>
+      <button type="button" class="secondary-button min-h-10 px-3" (click)="setPreset(365)">
+        1 year
+      </button>
+    </div>
+    <label class="min-w-36 flex-1 sm:max-w-44">
+      <span class="field-label">From</span>
+      <input type="date" class="field-control" [(ngModel)]="from" />
+    </label>
+    <label class="min-w-36 flex-1 sm:max-w-44">
+      <span class="field-label">To</span>
+      <input type="date" class="field-control" [(ngModel)]="to" />
+    </label>
+    <button type="button" class="primary-button" [disabled]="loading()" (click)="load()">
+      Apply
+    </button>
+  </section>
+
+  @if (loading()) {
+    <div class="loading-line mb-5"></div>
+  }
+  @if (error()) {
+    <section
+      class="mb-5 rounded-md border border-danger-700 bg-danger-100 p-4 text-sm text-danger-700"
+    >
+      <p>{{ error() }}</p>
+      <button type="button" class="mt-2 font-bold underline" (click)="load()">Try again</button>
+    </section>
+  }
+
+  @if (overview(); as report) {
+    <section
+      class="grid overflow-hidden border-y border-champagne-300 bg-white sm:rounded-md sm:border md:grid-cols-2 xl:grid-cols-4"
+    >
+      <div class="border-b border-champagne-200 px-5 py-4 md:border-r">
+        <p class="text-xs font-semibold text-ink-600">Collected revenue</p>
+        <p class="mt-2 text-2xl font-bold tabular-nums text-success-700">
+          {{ money(report.summary.revenue) }}
+        </p>
+        <p class="mt-1 text-xs text-ink-400">{{ report.summary.paymentCount }} payments</p>
+      </div>
+      <div class="border-b border-champagne-200 px-5 py-4 xl:border-r">
+        <p class="text-xs font-semibold text-ink-600">Expenses</p>
+        <p class="mt-2 text-2xl font-bold tabular-nums text-danger-700">
+          {{ money(report.summary.expenses) }}
+        </p>
+        <p class="mt-1 text-xs text-ink-400">{{ report.summary.expenseCount }} entries</p>
+      </div>
+      <div class="border-b border-champagne-200 px-5 py-4 md:border-b-0 md:border-r">
+        <p class="text-xs font-semibold text-ink-600">Net income</p>
+        <p
+          class="mt-2 text-2xl font-bold tabular-nums"
+          [class.text-danger-700]="report.summary.netIncome < 0"
+          [class.text-gold-700]="report.summary.netIncome >= 0"
+        >
+          {{ money(report.summary.netIncome) }}
+        </p>
+        <p class="mt-1 text-xs text-ink-400">Revenue less recorded expenses</p>
+      </div>
+      <div class="px-5 py-4">
+        <p class="text-xs font-semibold text-ink-600">Period</p>
+        <p class="mt-2 text-sm font-bold">
+          {{ date(report.range.from) }} – {{ date(report.range.to) }}
+        </p>
+        <p class="mt-1 text-xs text-ink-400">{{ report.range.currency }} · UTC dates</p>
+      </div>
+    </section>
+
+    <div class="mt-7 grid gap-7 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.7fr)]">
+      <section class="min-w-0">
+        <div class="mb-3 flex items-end justify-between">
+          <div>
+            <p class="page-eyebrow">Cash movement</p>
+            <h2 class="text-lg font-bold">Revenue versus expenses</h2>
+          </div>
+          <div class="flex gap-3 text-[11px] text-ink-600">
+            <span class="flex items-center gap-1.5"
+              ><span class="size-2 bg-gold-500"></span>Revenue</span
+            >
+            <span class="flex items-center gap-1.5"
+              ><span class="size-2 bg-danger-700"></span>Expenses</span
+            >
+          </div>
+        </div>
+        <div
+          class="overflow-x-auto border-y border-champagne-300 bg-white px-4 pb-3 pt-5 sm:rounded-md sm:border"
+        >
+          <div
+            class="finance-chart min-w-[32rem]"
+            role="img"
+            aria-label="Subscription revenue and expenses over the selected period"
+          >
+            @for (point of chart(); track point.label) {
+              <div
+                class="finance-chart-column"
+                [title]="
+                  date(point.label) +
+                  ': revenue ' +
+                  money(point.revenue) +
+                  ', expenses ' +
+                  money(point.expenses)
+                "
+              >
+                <span
+                  class="finance-chart-bar bg-gold-500"
+                  [style.height]="barHeight(point.revenue)"
+                ></span>
+                <span
+                  class="finance-chart-bar bg-danger-700"
+                  [style.height]="barHeight(point.expenses)"
+                ></span>
+              </div>
+            }
+          </div>
+          <div class="mt-2 flex justify-between text-[10px] text-ink-400">
+            <span>{{ chart()[0] ? date(chart()[0].label) : '' }}</span>
+            <span>{{ chart().length ? date(chart()[chart().length - 1].label) : '' }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <p class="page-eyebrow">Plans</p>
+        <h2 class="mb-3 text-lg font-bold">Revenue by plan</h2>
+        <div class="data-list">
+          @for (plan of report.byPlan; track plan.planId) {
+            <div class="data-row grid-cols-[1fr_auto]">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-bold">{{ plan.planName }}</p>
+                <p class="mt-1 text-xs text-ink-400">{{ plan.payments }} payments</p>
+              </div>
+              <p class="text-sm font-bold tabular-nums">{{ money(plan.revenue) }}</p>
+            </div>
+          } @empty {
+            <div class="empty-state min-h-44">
+              <svg lucideChartColumn class="mb-3 size-8 text-ink-400"></svg>
+              <p class="text-sm font-semibold">No payments in this period</p>
+            </div>
+          }
+        </div>
+      </section>
+    </div>
+
+    <div class="mt-7 grid gap-7 xl:grid-cols-2">
+      <section>
+        <p class="page-eyebrow">Collections</p>
+        <h2 class="mb-3 text-lg font-bold">Recent payments</h2>
+        <div class="data-list">
+          @for (payment of report.recentPayments; track payment.id) {
+            <div class="data-row grid-cols-[1fr_auto]">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-bold">{{ payment.client.businessName }}</p>
+                <p class="mt-1 truncate text-xs text-ink-600">
+                  {{ payment.plan.name }} · {{ date(payment.paidAt) }}
+                </p>
+                @if (payment.reference) {
+                  <p class="mt-1 truncate text-[11px] text-ink-400">Ref {{ payment.reference }}</p>
+                }
+              </div>
+              <p class="text-sm font-bold tabular-nums text-success-700">
+                {{ money(payment.amount) }}
+              </p>
+            </div>
+          } @empty {
+            <div class="empty-state min-h-44">
+              <svg lucideCircleDollarSign class="mb-3 size-8 text-ink-400"></svg>
+              <p class="text-sm font-semibold">No recorded payments</p>
+            </div>
+          }
+        </div>
+      </section>
+
+      <section>
+        <div class="mb-3 flex items-end justify-between">
+          <div>
+            <p class="page-eyebrow">Costs</p>
+            <h2 class="text-lg font-bold">Expense ledger</h2>
+          </div>
+          @if (canAdminister) {
+            <button
+              type="button"
+              class="min-h-11 px-2 text-xs font-bold text-gold-700"
+              (click)="openExpense()"
+            >
+              Add expense
+            </button>
+          }
+        </div>
+        <div class="data-list">
+          @for (expense of expenses(); track expense.id) {
+            <div class="data-row grid-cols-[1fr_auto]">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-bold">{{ expense.description }}</p>
+                <p class="mt-1 truncate text-xs text-ink-600">
+                  {{ categoryLabel(expense.category) }} · {{ date(expense.incurredAt) }}
+                </p>
+                @if (expense.vendor) {
+                  <p class="mt-1 truncate text-[11px] text-ink-400">{{ expense.vendor }}</p>
+                }
+              </div>
+              <div class="flex items-center gap-2">
+                <p class="text-sm font-bold tabular-nums text-danger-700">
+                  {{ money(expense.amount) }}
+                </p>
+                @if (canAdminister) {
+                  <button
+                    type="button"
+                    class="flex size-10 items-center justify-center text-ink-400 hover:text-danger-700"
+                    aria-label="Delete expense"
+                    [disabled]="saving()"
+                    (click)="deleteExpense(expense)"
+                  >
+                    <svg lucideTrash2 class="size-4"></svg>
+                  </button>
+                }
+              </div>
+            </div>
+          } @empty {
+            <div class="empty-state min-h-44">
+              <svg lucideReceiptText class="mb-3 size-8 text-ink-400"></svg>
+              <p class="text-sm font-semibold">No expenses in this period</p>
+            </div>
+          }
+        </div>
+      </section>
+    </div>
+  }
+</div>
+
+@if (expenseOpen()) {
+  <div class="sheet-backdrop" (click)="expenseOpen.set(false)">
+    <section
+      appDialogFocus
+      class="sheet-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="expense-title"
+      (dialogEscape)="expenseOpen.set(false)"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="sheet-header">
+        <div>
+          <p class="page-eyebrow">Finance</p>
+          <h2 id="expense-title" class="text-xl font-bold">Add expense</h2>
+        </div>
+        <button
+          type="button"
+          class="icon-button"
+          aria-label="Close"
+          (click)="expenseOpen.set(false)"
+        >
+          <svg lucideX class="size-5"></svg>
+        </button>
+      </header>
+      <form (ngSubmit)="saveExpense()">
+        <div class="sheet-body">
+          <label
+            ><span class="field-label">Description *</span
+            ><input
+              data-dialog-initial-focus
+              name="expenseDescription"
+              class="field-control"
+              maxlength="160"
+              [(ngModel)]="expenseForm.description"
+              required
+          /></label>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label
+              ><span class="field-label">Category *</span
+              ><select
+                name="expenseCategory"
+                class="field-control"
+                [(ngModel)]="expenseForm.category"
+              >
+                @for (category of categories; track category.value) {
+                  <option [value]="category.value">{{ category.label }}</option>
+                }
+              </select></label
+            >
+            <label
+              ><span class="field-label">Amount *</span
+              ><input
+                name="expenseAmount"
+                class="field-control"
+                type="number"
+                min="0.01"
+                step="0.01"
+                inputmode="decimal"
+                [(ngModel)]="expenseForm.amount"
+                required
+            /></label>
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label
+              ><span class="field-label">Date *</span
+              ><input
+                name="expenseDate"
+                class="field-control"
+                type="date"
+                [(ngModel)]="expenseForm.incurredAt"
+                required
+            /></label>
+            <label
+              ><span class="field-label">Vendor</span
+              ><input
+                name="expenseVendor"
+                class="field-control"
+                maxlength="160"
+                [(ngModel)]="expenseForm.vendor"
+            /></label>
+          </div>
+          <label
+            ><span class="field-label">Reference</span
+            ><input
+              name="expenseReference"
+              class="field-control"
+              maxlength="120"
+              [(ngModel)]="expenseForm.reference"
+          /></label>
+          <label
+            ><span class="field-label">Notes</span
+            ><textarea
+              name="expenseNotes"
+              class="field-control min-h-24 py-3"
+              maxlength="1000"
+              [(ngModel)]="expenseForm.notes"
+            ></textarea>
+          </label>
+        </div>
+        <footer class="sheet-footer">
+          <button
+            type="button"
+            class="secondary-button flex-1"
+            [disabled]="saving()"
+            (click)="expenseOpen.set(false)"
+          >
+            Cancel</button
+          ><button
+            type="submit"
+            class="primary-button flex-1"
+            [disabled]="saving() || !validExpense"
+          >
+            {{ saving() ? 'Saving' : 'Add expense' }}
+          </button>
+        </footer>
+      </form>
+    </section>
+  </div>
+}
+
+@if (paymentOpen()) {
+  <div class="sheet-backdrop" (click)="paymentOpen.set(false)">
+    <section
+      appDialogFocus
+      class="sheet-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="payment-title"
+      (dialogEscape)="paymentOpen.set(false)"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="sheet-header">
+        <div>
+          <p class="page-eyebrow">Collections</p>
+          <h2 id="payment-title" class="text-xl font-bold">Record payment</h2>
+        </div>
+        <button
+          type="button"
+          class="icon-button"
+          aria-label="Close"
+          (click)="paymentOpen.set(false)"
+        >
+          <svg lucideX class="size-5"></svg>
+        </button>
+      </header>
+      <form (ngSubmit)="savePayment()">
+        <div class="sheet-body">
+          <label
+            ><span class="field-label">Subscription *</span
+            ><select
+              data-dialog-initial-focus
+              name="paymentSubscription"
+              class="field-control"
+              [(ngModel)]="paymentForm.subscriptionId"
+              (ngModelChange)="paymentSubscriptionChanged()"
+              required
+            >
+              <option value="" disabled>Select subscription</option>
+              @for (subscription of subscriptions(); track subscription.id) {
+                <option [value]="subscription.id">
+                  {{ subscription.client.businessName }} · {{ subscription.planVersion.plan.name }}
+                </option>
+              }
+            </select></label
+          >
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label
+              ><span class="field-label">Amount *</span
+              ><input
+                name="paymentAmount"
+                class="field-control"
+                type="number"
+                min="0.01"
+                step="0.01"
+                inputmode="decimal"
+                [(ngModel)]="paymentForm.amount"
+                required
+            /></label>
+            <label
+              ><span class="field-label">Payment date *</span
+              ><input
+                name="paymentDate"
+                class="field-control"
+                type="date"
+                [(ngModel)]="paymentForm.paidAt"
+                required
+            /></label>
+          </div>
+          <label
+            ><span class="field-label">Reference</span
+            ><input
+              name="paymentReference"
+              class="field-control"
+              maxlength="120"
+              placeholder="Receipt or transaction number"
+              [(ngModel)]="paymentForm.reference"
+          /></label>
+          <label
+            ><span class="field-label">Notes</span
+            ><textarea
+              name="paymentNotes"
+              class="field-control min-h-24 py-3"
+              maxlength="1000"
+              [(ngModel)]="paymentForm.notes"
+            ></textarea>
+          </label>
+        </div>
+        <footer class="sheet-footer">
+          <button
+            type="button"
+            class="secondary-button flex-1"
+            [disabled]="saving()"
+            (click)="paymentOpen.set(false)"
+          >
+            Cancel</button
+          ><button
+            type="submit"
+            class="primary-button flex-1"
+            [disabled]="saving() || !validPayment"
+          >
+            {{ saving() ? 'Saving' : 'Record payment' }}
+          </button>
+        </footer>
+      </form>
+    </section>
+  </div>
+}

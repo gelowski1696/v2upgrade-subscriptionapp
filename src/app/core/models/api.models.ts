@@ -98,6 +98,64 @@ export interface SubscriptionRecord {
   };
 }
 
+export type ExpenseCategory =
+  | 'INFRASTRUCTURE'
+  | 'SOFTWARE'
+  | 'MARKETING'
+  | 'OPERATIONS'
+  | 'PROFESSIONAL_SERVICES'
+  | 'TAXES'
+  | 'OTHER';
+
+export interface ExpenseRecord {
+  id: string;
+  category: ExpenseCategory;
+  description: string;
+  amount: string;
+  currency: string;
+  incurredAt: string;
+  vendor: string | null;
+  reference: string | null;
+  notes: string | null;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FinanceOverview {
+  range: { from: string; to: string; timezone: 'UTC'; currency: string };
+  summary: {
+    revenue: number;
+    expenses: number;
+    netIncome: number;
+    paymentCount: number;
+    expenseCount: number;
+  };
+  daily: Array<{
+    day: string;
+    revenue: number;
+    expenses: number;
+    netIncome: number;
+  }>;
+  byPlan: Array<{
+    planId: string;
+    planName: string;
+    revenue: number;
+    payments: number;
+  }>;
+  recentPayments: Array<{
+    id: string;
+    subscriptionId: string;
+    amount: string;
+    currency: string;
+    reference: string | null;
+    paidAt: string;
+    notes: string | null;
+    client: { id: string; businessName: string };
+    plan: { id: string; name: string };
+  }>;
+}
+
 export interface ApiFailure {
   statusCode?: number;
   code?: string;

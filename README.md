@@ -10,6 +10,8 @@ Android-first subscription administration for POSV2. The app is built with Angul
 - Plan creation, immutable versions, publishing, and archiving
 - Subscription creation, activation, suspension, reactivation, renewal, and cancellation
 - Plan defaults and per-subscription control for all POS and owner-dashboard Feature Mods
+- Subscription finance analytics for collected payments, revenue by plan, expenses, and net income
+- Payment recording and an auditable expense ledger for operating costs
 - API health indicator, loading states, empty states, validation feedback, and toast notifications
 
 ## Local development
@@ -42,6 +44,12 @@ The **Owner web dashboard** switch is managed separately in each subscription. T
 desktop synchronization, desktop web-user management, new portal sessions, and existing portal API
 requests. Plans can set its default for new subscriptions. Existing subscriptions default to enabled
 until an administrator explicitly disables them.
+
+## Subscription finance
+
+The **Finance** workspace reports actual recorded collections rather than projected subscription
+value. Operators can record payments. `SUPER_ADMIN` and `ADMIN` accounts can also add or remove
+expenses. Period totals use UTC dates and currently report in PHP.
 
 ## Android setup
 

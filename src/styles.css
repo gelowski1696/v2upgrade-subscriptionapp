@@ -120,8 +120,12 @@
   }
 
   .sheet-panel {
-    @apply max-h-[92dvh] w-full overflow-y-auto rounded-t-lg bg-white shadow-lift sm:max-w-lg sm:rounded-lg;
+    @apply flex h-[92dvh] max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-lg bg-white shadow-lift sm:h-auto sm:max-w-lg sm:rounded-lg;
     animation: sheet-enter 180ms ease-out both;
+  }
+
+  .sheet-panel > form {
+    @apply flex min-h-0 flex-1 flex-col;
   }
 
   .sheet-header {
@@ -129,11 +133,11 @@
   }
 
   .sheet-body {
-    @apply space-y-4 px-5 py-5;
+    @apply relative z-0 min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5;
   }
 
   .sheet-footer {
-    @apply sticky bottom-0 flex gap-3 border-t border-champagne-300 bg-white px-5 py-4;
+    @apply relative z-10 flex shrink-0 gap-3 border-t border-champagne-300 bg-white px-5 py-4;
   }
 
   .empty-state {

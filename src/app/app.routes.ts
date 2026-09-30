@@ -34,6 +34,11 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'finance',
+        loadComponent: () =>
+          import('./features/finance/finance').then((module) => module.FinancePage),
+      },
+      {
         path: 'web-analytics',
         canActivate: [superAdminGuard],
         loadComponent: () =>
