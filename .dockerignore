@@ -1,0 +1,10 @@
+node_modules
+dist
+.angular
+src-tauri
+test-results
+tests
+.git
+.gitignore
+README*.md
+docs

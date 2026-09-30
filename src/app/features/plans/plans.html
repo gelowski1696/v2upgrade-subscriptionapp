@@ -1,0 +1,362 @@
+<div class="page-shell">
+  <header class="page-heading">
+    <div>
+      <p class="page-eyebrow">Catalog</p>
+      <h1 class="page-title">Plans</h1>
+      <p class="page-subtitle">{{ total() }} subscription plans</p>
+    </div>
+    @if (canManage) {
+      <button
+        type="button"
+        class="primary-button shrink-0"
+        aria-label="Add plan"
+        (click)="openCreate()"
+      >
+        <svg lucidePlus class="size-4"></svg><span class="hidden sm:inline">Add plan</span>
+      </button>
+    }
+  </header>
+
+  <label class="search-control mb-3">
+    <svg lucideSearch class="size-5 text-ink-400"></svg>
+    <input
+      [(ngModel)]="search"
+      (keyup.enter)="applyFilters()"
+      placeholder="Search plans"
+      aria-label="Search plans"
+    />
+    @if (search) {
+      <button
+        type="button"
+        class="-mr-2 flex size-9 items-center justify-center text-ink-400"
+        aria-label="Clear search"
+        (click)="search = ''; applyFilters()"
+      >
+        <svg lucideX class="size-4"></svg>
+      </button>
+    }
+  </label>
+
+  <div class="mb-4 flex gap-2 overflow-x-auto pb-1">
+    @for (
+      option of [
+        { value: '', label: 'All' },
+        { value: 'DRAFT', label: 'Draft' },
+        { value: 'ACTIVE', label: 'Published' },
+        { value: 'ARCHIVED', label: 'Archived' },
+      ];
+      track option.value
+    ) {
+      <button
+        type="button"
+        class="min-h-10 shrink-0 rounded-full border px-4 text-xs font-semibold"
+        [class.border-gold-500]="status === option.value"
+        [class.bg-gold-500]="status === option.value"
+        [class.border-champagne-300]="status !== option.value"
+        [class.bg-white]="status !== option.value"
+        (click)="selectStatus($any(option.value))"
+      >
+        {{ option.label }}
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="loading-line"></div>
+  }
+  <section class="data-list">
+    @for (plan of plans(); track plan.id) {
+      <article
+        class="data-row grid-cols-[1fr_auto] lg:grid-cols-[minmax(15rem,1.5fr)_minmax(10rem,1fr)_minmax(9rem,0.8fr)_auto]"
+      >
+        <button
+          type="button"
+          class="min-w-0 text-left disabled:cursor-default"
+          [disabled]="!canManage"
+          (click)="openVersion(plan)"
+        >
+          <div class="flex flex-wrap items-center gap-2">
+            <p class="text-sm font-bold">{{ plan.name }}</p>
+            <span
+              class="status-chip"
+              [class.bg-success-100]="plan.status === 'ACTIVE'"
+              [class.text-success-700]="plan.status === 'ACTIVE'"
+              [class.bg-warning-100]="plan.status === 'DRAFT'"
+              [class.text-warning-700]="plan.status === 'DRAFT'"
+              [class.bg-champagne-200]="plan.status === 'ARCHIVED'"
+              >{{ plan.status }}</span
+            >
+          </div>
+          <p class="mt-1 text-xs text-ink-600">
+            {{ plan.code }} · {{ money(plan.versions[0]) }} /
+            {{ (plan.versions[0]?.billingInterval || '').toLowerCase() }}
+          </p>
+          <p class="mt-1 text-[11px] text-ink-400">
+            Version {{ plan.versions[0]?.version || 0 }} ·
+            {{ plan.versions[0]?.maxDevices || 0 }} device limit
+          </p>
+        </button>
+        <p class="hidden text-sm font-semibold tabular-nums text-ink-800 lg:block">
+          {{ money(plan.versions[0]) }}
+        </p>
+        <p class="hidden text-sm capitalize text-ink-600 lg:block">
+          {{ (plan.versions[0]?.billingInterval || 'Not set').toLowerCase() }}
+        </p>
+        <div class="flex gap-1">
+          @if (canManage && plan.status !== 'ARCHIVED') {
+            <button
+              type="button"
+              class="icon-button"
+              aria-label="Add plan version"
+              (click)="openVersion(plan)"
+            >
+              <svg lucidePlus class="size-4"></svg>
+            </button>
+            @if (!plan.versions[0]?.publishedAt) {
+              <button
+                type="button"
+                class="icon-button"
+                aria-label="Publish plan"
+                (click)="publish(plan)"
+              >
+                <svg lucideUpload class="size-4"></svg>
+              </button>
+            }
+          }
+        </div>
+      </article>
+    } @empty {
+      @if (!loading()) {
+        <div class="empty-state">
+          <svg lucideLayers3 class="mb-3 size-8 text-ink-400"></svg>
+          <p class="text-sm font-semibold">No plans found</p>
+        </div>
+      }
+    }
+  </section>
+
+  @if (totalPages() > 1) {
+    <footer class="mt-4 flex items-center justify-center gap-2">
+      <button
+        type="button"
+        class="icon-button"
+        aria-label="Previous page"
+        [disabled]="page === 1"
+        (click)="goToPage(page - 1)"
+      >
+        <svg lucideChevronLeft class="size-4"></svg>
+      </button>
+      <span
+        class="flex h-11 min-w-11 items-center justify-center rounded-md bg-gold-500 px-3 text-sm font-bold"
+        >{{ page }}</span
+      ><span class="text-xs text-ink-600">of {{ totalPages() }}</span>
+      <button
+        type="button"
+        class="icon-button"
+        aria-label="Next page"
+        [disabled]="page === totalPages()"
+        (click)="goToPage(page + 1)"
+      >
+        <svg lucideChevronRight class="size-4"></svg>
+      </button>
+    </footer>
+  }
+</div>
+
+@if (editorOpen()) {
+  <div class="sheet-backdrop" (click)="closeEditor()">
+    <section
+      appDialogFocus
+      class="sheet-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="plan-editor-title"
+      (dialogEscape)="closeEditor()"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="sheet-header">
+        <div>
+          <p class="page-eyebrow">Plan catalog</p>
+          <h2 id="plan-editor-title" class="text-xl font-bold">
+            {{ versioningPlan ? 'New plan version' : 'Add plan' }}
+          </h2>
+        </div>
+        <button type="button" class="icon-button" aria-label="Close" (click)="closeEditor()">
+          <svg lucideX class="size-5"></svg>
+        </button>
+      </header>
+      <form (ngSubmit)="save()">
+        <div class="sheet-body">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label
+              ><span class="field-label">Plan code *</span
+              ><input
+                name="code"
+                data-dialog-initial-focus
+                class="field-control"
+                [(ngModel)]="form.code"
+                [disabled]="!!versioningPlan"
+                required
+            /></label>
+            <label
+              ><span class="field-label">Plan name *</span
+              ><input
+                name="name"
+                class="field-control"
+                [(ngModel)]="form.name"
+                [disabled]="!!versioningPlan"
+                required
+            /></label>
+          </div>
+          <label
+            ><span class="field-label">Billing interval</span
+            ><select name="interval" class="field-control" [(ngModel)]="form.billingInterval">
+              <option value="MONTHLY">Monthly</option>
+              <option value="QUARTERLY">Quarterly</option>
+              <option value="SEMIANNUAL">Semiannual</option>
+              <option value="ANNUAL">Annual</option>
+              <option value="CUSTOM">Custom</option>
+            </select></label
+          >
+          <div class="grid grid-cols-[1fr_88px] gap-3">
+            <label
+              ><span class="field-label">Amount *</span
+              ><input
+                name="amount"
+                class="field-control"
+                [(ngModel)]="form.amount"
+                inputmode="decimal"
+                placeholder="0.00"
+                required /></label
+            ><label
+              ><span class="field-label">Currency</span
+              ><input
+                name="currency"
+                class="field-control uppercase"
+                [(ngModel)]="form.currency"
+                maxlength="3"
+            /></label>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <label
+              ><span class="field-label">Trial days</span
+              ><input
+                name="trialDays"
+                class="field-control"
+                type="number"
+                min="0"
+                [(ngModel)]="form.trialDays" /></label
+            ><label
+              ><span class="field-label">Grace days</span
+              ><input
+                name="graceDays"
+                class="field-control"
+                type="number"
+                min="0"
+                [(ngModel)]="form.graceDays" /></label
+            ><label
+              ><span class="field-label">Devices</span
+              ><input
+                name="maxDevices"
+                class="field-control"
+                type="number"
+                min="1"
+                [(ngModel)]="form.maxDevices"
+            /></label>
+          </div>
+          <fieldset class="border-t border-champagne-300 pt-4">
+            <legend class="field-label pr-2">Included features</legend>
+            <div class="space-y-1">
+              <label class="flex min-h-11 items-center justify-between"
+                ><span class="text-sm">Owner web dashboard</span
+                ><input
+                  name="webDashboard"
+                  type="checkbox"
+                  class="size-5 accent-gold-500"
+                  [(ngModel)]="form.webDashboard"
+              /></label>
+              <label class="flex min-h-11 items-center justify-between"
+                ><span class="text-sm">Reports</span
+                ><input
+                  name="reports"
+                  type="checkbox"
+                  class="size-5 accent-gold-500"
+                  [(ngModel)]="form.reports"
+              /></label>
+              <label class="flex min-h-11 items-center justify-between"
+                ><span class="text-sm">Database backups</span
+                ><input
+                  name="backups"
+                  type="checkbox"
+                  class="size-5 accent-gold-500"
+                  [(ngModel)]="form.backups"
+              /></label>
+              <label class="flex min-h-11 items-center justify-between"
+                ><span class="text-sm">Multiple users</span
+                ><input
+                  name="multiUser"
+                  type="checkbox"
+                  class="size-5 accent-gold-500"
+                  [(ngModel)]="form.multiUser"
+              /></label>
+            </div>
+          </fieldset>
+          <fieldset class="border-t border-champagne-300 pt-4">
+            <legend class="field-label pr-2">POS and web dashboard feature mods</legend>
+            <p class="mb-4 text-xs leading-5 text-ink-500">
+              These defaults are copied to each new subscription. Existing subscriptions keep their
+              current switches until edited from Subscriptions.
+            </p>
+            <div class="space-y-5">
+              @for (group of featureModGroups; track group.label) {
+                <section>
+                  <h3 class="mb-1 text-xs font-bold uppercase tracking-wide text-ink-600">
+                    {{ group.label }}
+                  </h3>
+                  <div class="divide-y divide-champagne-200">
+                    @for (feature of group.features; track feature[0]) {
+                      <label class="flex min-h-11 items-center justify-between gap-4">
+                        <span class="text-sm">{{ feature[1] }}</span>
+                        <input
+                          [name]="'feature-' + feature[0]"
+                          type="checkbox"
+                          class="size-5 shrink-0 accent-gold-500"
+                          [(ngModel)]="form.featureMods[feature[0]]"
+                        />
+                      </label>
+                    }
+                  </div>
+                </section>
+              }
+            </div>
+          </fieldset>
+          @if (versioningPlan && versioningPlan.status !== 'ARCHIVED') {
+            <button
+              type="button"
+              class="flex min-h-11 items-center gap-2 text-sm font-semibold text-danger-700"
+              (click)="archive(versioningPlan)"
+            >
+              <svg lucideArchive class="size-4"></svg>Archive plan
+            </button>
+          }
+        </div>
+        <footer class="sheet-footer">
+          <button
+            type="button"
+            class="secondary-button flex-1"
+            [disabled]="saving()"
+            (click)="closeEditor()"
+          >
+            Cancel</button
+          ><button
+            type="submit"
+            class="primary-button flex-1"
+            [disabled]="saving() || !form.code.trim() || !form.name.trim() || !form.amount"
+          >
+            {{ saving() ? 'Saving' : versioningPlan ? 'Add version' : 'Create plan' }}
+          </button>
+        </footer>
+      </form>
+    </section>
+  </div>
+}

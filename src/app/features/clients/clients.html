@@ -1,0 +1,270 @@
+<div class="page-shell">
+  <header class="page-heading">
+    <div>
+      <p class="page-eyebrow">Accounts</p>
+      <h1 class="page-title">Clients</h1>
+      <p class="page-subtitle">{{ total() }} registered businesses</p>
+    </div>
+    @if (canEdit) {
+      <button
+        type="button"
+        class="primary-button shrink-0"
+        aria-label="Add client"
+        (click)="openCreate()"
+      >
+        <svg lucidePlus class="size-4"></svg><span class="hidden sm:inline">Add client</span>
+      </button>
+    }
+  </header>
+
+  <div class="mb-3 flex gap-2">
+    <label class="search-control">
+      <svg lucideSearch class="size-5 shrink-0 text-ink-400"></svg>
+      <input
+        [(ngModel)]="search"
+        (ngModelChange)="searchChanged()"
+        placeholder="Search clients"
+        aria-label="Search clients"
+      />
+      @if (search) {
+        <button
+          type="button"
+          class="-mr-2 flex size-9 items-center justify-center text-ink-400"
+          aria-label="Clear search"
+          (click)="search = ''; searchChanged()"
+        >
+          <svg lucideX class="size-4"></svg>
+        </button>
+      }
+    </label>
+  </div>
+
+  <div class="mb-4 flex gap-2 overflow-x-auto pb-1">
+    @for (
+      option of [
+        { value: '', label: 'All' },
+        { value: 'ACTIVE', label: 'Active' },
+        { value: 'INACTIVE', label: 'Inactive' },
+        { value: 'ARCHIVED', label: 'Archived' },
+      ];
+      track option.value
+    ) {
+      <button
+        type="button"
+        class="min-h-10 shrink-0 rounded-full border px-4 text-xs font-semibold"
+        [class.border-gold-500]="status === option.value"
+        [class.bg-gold-500]="status === option.value"
+        [class.border-champagne-300]="status !== option.value"
+        [class.bg-white]="status !== option.value"
+        (click)="selectStatus($any(option.value))"
+      >
+        {{ option.label }}
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="loading-line"></div>
+  }
+  @if (error()) {
+    <p class="mb-3 bg-danger-100 p-3 text-sm text-danger-700">{{ error() }}</p>
+  }
+
+  <section class="data-list">
+    @for (client of clients(); track client.id) {
+      <article
+        class="data-row grid-cols-[1fr_auto] lg:grid-cols-[minmax(15rem,1.5fr)_minmax(10rem,1fr)_minmax(11rem,1fr)_auto]"
+      >
+        <button
+          type="button"
+          class="min-w-0 text-left disabled:cursor-default"
+          [disabled]="!canEdit"
+          (click)="openEdit(client)"
+        >
+          <div class="flex items-center gap-2">
+            <p class="truncate text-sm font-bold">{{ client.businessName }}</p>
+            <span class="status-chip" [class]="statusClass(client.status)">{{
+              client.status
+            }}</span>
+          </div>
+          <p class="mt-1 truncate text-xs text-ink-600">
+            {{ client.code }} · {{ client.ownerName || client.phone || 'No contact details' }}
+          </p>
+        </button>
+        <p class="hidden truncate text-sm text-ink-600 lg:block">
+          {{ client.ownerName || 'No contact name' }}
+        </p>
+        <div class="hidden min-w-0 text-sm text-ink-600 lg:block">
+          <p class="truncate">{{ client.email || 'No email' }}</p>
+          <p class="mt-1 truncate text-xs text-ink-400">{{ client.phone || 'No phone' }}</p>
+        </div>
+        @if (canEdit) {
+          <button
+            type="button"
+            class="icon-button"
+            aria-label="Edit client"
+            (click)="openEdit(client)"
+          >
+            <svg lucidePencil class="size-4"></svg>
+          </button>
+        }
+      </article>
+    } @empty {
+      @if (!loading()) {
+        <div class="empty-state">
+          <svg lucideBuilding2 class="mb-3 size-8 text-ink-400"></svg>
+          <p class="text-sm font-semibold">No clients found</p>
+        </div>
+      }
+    }
+  </section>
+
+  @if (totalPages() > 1) {
+    <footer class="mt-4 flex items-center justify-center gap-2">
+      <button
+        type="button"
+        class="icon-button"
+        aria-label="Previous page"
+        [disabled]="page === 1"
+        (click)="goToPage(page - 1)"
+      >
+        <svg lucideChevronLeft class="size-4"></svg>
+      </button>
+      <span
+        class="flex h-11 min-w-11 items-center justify-center rounded-md bg-gold-500 px-3 text-sm font-bold tabular-nums"
+        >{{ page }}</span
+      >
+      <span class="text-xs text-ink-600">of {{ totalPages() }}</span>
+      <button
+        type="button"
+        class="icon-button"
+        aria-label="Next page"
+        [disabled]="page === totalPages()"
+        (click)="goToPage(page + 1)"
+      >
+        <svg lucideChevronRight class="size-4"></svg>
+      </button>
+    </footer>
+  }
+</div>
+
+@if (editorOpen()) {
+  <div class="sheet-backdrop" (click)="closeEditor()">
+    <section
+      appDialogFocus
+      class="sheet-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="client-editor-title"
+      (dialogEscape)="closeEditor()"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="sheet-header">
+        <div>
+          <p class="page-eyebrow">Client record</p>
+          <h2 id="client-editor-title" class="text-xl font-bold">
+            {{ editing ? 'Edit client' : 'Add client' }}
+          </h2>
+        </div>
+        <button type="button" class="icon-button" aria-label="Close" (click)="closeEditor()">
+          <svg lucideX class="size-5"></svg>
+        </button>
+      </header>
+      <form (ngSubmit)="save()">
+        <div class="sheet-body">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label
+              ><span class="field-label">Client code *</span
+              ><input
+                name="code"
+                data-dialog-initial-focus
+                class="field-control"
+                [(ngModel)]="form.code"
+                [disabled]="!!editing"
+                required
+                maxlength="40"
+            /></label>
+            <label
+              ><span class="field-label">Status</span
+              ><select name="status" class="field-control" [(ngModel)]="form.status">
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+                <option value="ARCHIVED">Archived</option>
+              </select></label
+            >
+          </div>
+          <label
+            ><span class="field-label">Business name *</span
+            ><input
+              name="businessName"
+              class="field-control"
+              [(ngModel)]="form.businessName"
+              required
+              maxlength="180"
+          /></label>
+          <label
+            ><span class="field-label">Owner or contact</span
+            ><input
+              name="ownerName"
+              class="field-control"
+              [(ngModel)]="form.ownerName"
+              maxlength="160"
+          /></label>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label
+              ><span class="field-label">Phone</span
+              ><input
+                name="phone"
+                class="field-control"
+                [(ngModel)]="form.phone"
+                inputmode="tel"
+                maxlength="50"
+            /></label>
+            <label
+              ><span class="field-label">Email</span
+              ><input
+                name="email"
+                class="field-control"
+                [(ngModel)]="form.email"
+                type="email"
+                maxlength="180"
+            /></label>
+          </div>
+          <label
+            ><span class="field-label">Address</span
+            ><textarea
+              name="address"
+              class="field-control min-h-20 py-3"
+              [(ngModel)]="form.address"
+            ></textarea>
+          </label>
+          <label
+            ><span class="field-label">Notes</span
+            ><textarea
+              name="notes"
+              class="field-control min-h-20 py-3"
+              [(ngModel)]="form.notes"
+            ></textarea>
+          </label>
+        </div>
+        <footer class="sheet-footer">
+          <button
+            type="button"
+            class="secondary-button flex-1"
+            [disabled]="saving()"
+            (click)="closeEditor()"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="primary-button flex-1"
+            [disabled]="saving() || !form.code.trim() || !form.businessName.trim()"
+          >
+            {{ saving() ? 'Saving' : editing ? 'Save changes' : 'Add client' }}
+          </button>
+        </footer>
+      </form>
+    </section>
+  </div>
+}

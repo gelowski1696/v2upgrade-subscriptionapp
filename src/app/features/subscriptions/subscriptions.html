@@ -1,0 +1,487 @@
+<div class="page-shell">
+  <header class="page-heading">
+    <div>
+      <p class="page-eyebrow">Licensing</p>
+      <h1 class="page-title">Subscriptions</h1>
+      <p class="page-subtitle">{{ total() }} client subscriptions</p>
+    </div>
+    @if (canOperate) {
+      <button
+        type="button"
+        class="primary-button shrink-0"
+        aria-label="New subscription"
+        (click)="openCreate()"
+      >
+        <svg lucidePlus class="size-4"></svg><span class="hidden sm:inline">New subscription</span>
+      </button>
+    }
+  </header>
+
+  <label class="search-control mb-3"
+    ><svg lucideSearch class="size-5 text-ink-400"></svg
+    ><input
+      [(ngModel)]="search"
+      (keyup.enter)="applyFilters()"
+      placeholder="Search client or plan"
+      aria-label="Search subscriptions"
+    />
+    @if (search) {
+      <button
+        type="button"
+        class="-mr-2 flex size-9 items-center justify-center text-ink-400"
+        aria-label="Clear search"
+        (click)="search = ''; applyFilters()"
+      >
+        <svg lucideX class="size-4"></svg>
+      </button>
+    }
+  </label>
+  <div class="mb-4 flex gap-2 overflow-x-auto pb-1">
+    @for (
+      option of [
+        { value: '', label: 'All' },
+        { value: 'DRAFT', label: 'Draft' },
+        { value: 'ACTIVE', label: 'Active' },
+        { value: 'GRACE', label: 'Grace' },
+        { value: 'SUSPENDED', label: 'Suspended' },
+        { value: 'EXPIRED', label: 'Expired' },
+        { value: 'CANCELLED', label: 'Cancelled' },
+      ];
+      track option.value
+    ) {
+      <button
+        type="button"
+        class="min-h-10 shrink-0 rounded-full border px-4 text-xs font-semibold"
+        [class.border-gold-500]="status === option.value"
+        [class.bg-gold-500]="status === option.value"
+        [class.border-champagne-300]="status !== option.value"
+        [class.bg-white]="status !== option.value"
+        (click)="selectStatus($any(option.value))"
+      >
+        {{ option.label }}
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="loading-line"></div>
+  }
+  <section class="data-list">
+    @for (subscription of subscriptions(); track subscription.id) {
+      <button
+        type="button"
+        class="data-row w-full grid-cols-[1fr_auto] lg:grid-cols-[minmax(15rem,1.5fr)_minmax(11rem,1fr)_minmax(9rem,0.8fr)_minmax(8rem,0.7fr)]"
+        (click)="openDetails(subscription)"
+      >
+        <div class="min-w-0 text-left">
+          <div class="flex flex-wrap items-center gap-2">
+            <p class="truncate text-sm font-bold">{{ subscription.client.businessName }}</p>
+            <span class="status-chip" [class]="statusClasses(subscription.status)">{{
+              subscription.status
+            }}</span>
+          </div>
+          <p class="mt-1 truncate text-xs text-ink-600">
+            {{ subscription.planVersion.plan.name }} · {{ subscription.client.code }}
+          </p>
+          <p class="mt-1 text-[11px] text-ink-400">Ends {{ date(subscription.expiresAt) }}</p>
+        </div>
+        <p class="hidden truncate text-left text-sm text-ink-600 lg:block">
+          {{ subscription.planVersion.plan.name }}
+        </p>
+        <p class="hidden text-left text-sm text-ink-600 lg:block">
+          {{ date(subscription.expiresAt) }}
+        </p>
+        <div class="text-right">
+          <p class="text-sm font-bold tabular-nums">{{ money(subscription) }}</p>
+          <p class="mt-1 text-[11px] text-ink-400">
+            {{ subscription.billingInterval.toLowerCase() }}
+          </p>
+        </div>
+      </button>
+    } @empty {
+      @if (!loading()) {
+        <div class="empty-state">
+          <svg lucideCreditCard class="mb-3 size-8 text-ink-400"></svg>
+          <p class="text-sm font-semibold">No subscriptions found</p>
+        </div>
+      }
+    }
+  </section>
+
+  @if (totalPages() > 1) {
+    <footer class="mt-4 flex items-center justify-center gap-2">
+      <button
+        type="button"
+        class="icon-button"
+        aria-label="Previous page"
+        [disabled]="page === 1"
+        (click)="goToPage(page - 1)"
+      >
+        <svg lucideChevronLeft class="size-4"></svg></button
+      ><span
+        class="flex h-11 min-w-11 items-center justify-center rounded-md bg-gold-500 px-3 text-sm font-bold"
+        >{{ page }}</span
+      ><span class="text-xs text-ink-600">of {{ totalPages() }}</span
+      ><button
+        type="button"
+        class="icon-button"
+        aria-label="Next page"
+        [disabled]="page === totalPages()"
+        (click)="goToPage(page + 1)"
+      >
+        <svg lucideChevronRight class="size-4"></svg>
+      </button>
+    </footer>
+  }
+</div>
+
+@if (editorOpen()) {
+  <div class="sheet-backdrop" (click)="editorOpen.set(false)">
+    <section
+      appDialogFocus
+      class="sheet-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="subscription-editor-title"
+      (dialogEscape)="editorOpen.set(false)"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="sheet-header">
+        <div>
+          <p class="page-eyebrow">Subscription</p>
+          <h2 id="subscription-editor-title" class="text-xl font-bold">Create subscription</h2>
+        </div>
+        <button
+          type="button"
+          class="icon-button"
+          aria-label="Close"
+          (click)="editorOpen.set(false)"
+        >
+          <svg lucideX class="size-5"></svg>
+        </button>
+      </header>
+      <form (ngSubmit)="save()">
+        <div class="sheet-body">
+          <label
+            ><span class="field-label">Client *</span
+            ><select
+              name="client"
+              data-dialog-initial-focus
+              class="field-control"
+              [(ngModel)]="form.clientId"
+              required
+            >
+              <option value="" disabled>Select client</option>
+              @for (client of clients(); track client.id) {
+                <option [value]="client.id">{{ client.businessName }} ({{ client.code }})</option>
+              }
+            </select></label
+          >
+          <label
+            ><span class="field-label">Plan *</span
+            ><select
+              name="plan"
+              class="field-control"
+              [(ngModel)]="form.planVersionId"
+              (ngModelChange)="planChanged()"
+              required
+            >
+              <option value="" disabled>Select published plan</option>
+              @for (plan of plans(); track plan.id) {
+                <option [value]="plan.versions[0].id">
+                  {{ plan.name }} · {{ plan.versions[0].currency }} {{ plan.versions[0].amount }}
+                </option>
+              }
+            </select></label
+          >
+          <label
+            ><span class="field-label">Device ID *</span
+            ><input
+              name="deviceId"
+              class="field-control font-mono uppercase"
+              type="text"
+              minlength="8"
+              maxlength="120"
+              autocomplete="off"
+              placeholder="POS-DEVICE-ID"
+              [(ngModel)]="form.deviceId"
+              required
+            />
+            <span class="mt-1 block text-[11px] text-ink-500"
+              >Enter the Device ID shown by the client's Windows POS.</span
+            ></label
+          >
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label
+              ><span class="field-label">Start date</span
+              ><input
+                name="startsAt"
+                class="field-control"
+                type="date"
+                [(ngModel)]="form.startsAt" /></label
+            ><label
+              ><span class="field-label">Custom expiry</span
+              ><input
+                name="expiresAt"
+                class="field-control"
+                type="date"
+                [(ngModel)]="form.expiresAt"
+            /></label>
+          </div>
+          <label
+            ><span class="field-label">Notes</span
+            ><textarea
+              name="notes"
+              class="field-control min-h-24 py-3"
+              [(ngModel)]="form.notes"
+            ></textarea>
+          </label>
+        </div>
+        <footer class="sheet-footer">
+          <button
+            type="button"
+            class="secondary-button flex-1"
+            [disabled]="saving()"
+            (click)="editorOpen.set(false)"
+          >
+            Cancel</button
+          ><button
+            type="submit"
+            class="primary-button flex-1"
+            [disabled]="saving() || !form.clientId || !form.planVersionId || !validDeviceId"
+          >
+            {{ saving() ? 'Creating' : 'Create draft' }}
+          </button>
+        </footer>
+      </form>
+    </section>
+  </div>
+}
+
+@if (selected(); as subscription) {
+  <div class="sheet-backdrop" (click)="selected.set(null)">
+    <section
+      appDialogFocus
+      class="sheet-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="subscription-details-title"
+      (dialogEscape)="selected.set(null)"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="sheet-header">
+        <div class="min-w-0">
+          <p class="page-eyebrow">Subscription details</p>
+          <h2 id="subscription-details-title" class="truncate text-xl font-bold">
+            {{ subscription.client.businessName }}
+          </h2>
+          <p class="mt-1 text-xs text-ink-600">{{ subscription.client.code }}</p>
+        </div>
+        <button type="button" class="icon-button" aria-label="Close" (click)="selected.set(null)">
+          <svg lucideX class="size-5"></svg>
+        </button>
+      </header>
+      <div class="sheet-body">
+        <div class="flex items-center justify-between border-b border-champagne-300 pb-4">
+          <div>
+            <p class="text-xs text-ink-600">Plan</p>
+            <p class="mt-1 font-bold">{{ subscription.planVersion.plan.name }}</p>
+          </div>
+          <span class="status-chip" [class]="statusClasses(subscription.status)">{{
+            subscription.status
+          }}</span>
+        </div>
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-5 text-sm">
+          <div>
+            <dt class="text-xs text-ink-600">Amount</dt>
+            <dd class="mt-1 font-bold tabular-nums">{{ money(subscription) }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-ink-600">Billing</dt>
+            <dd class="mt-1 font-semibold">{{ subscription.billingInterval.toLowerCase() }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-ink-600">Started</dt>
+            <dd class="mt-1 font-semibold">{{ date(subscription.startsAt) }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-ink-600">Expires</dt>
+            <dd class="mt-1 font-semibold">{{ date(subscription.expiresAt) }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-ink-600">Device limit</dt>
+            <dd class="mt-1 font-semibold">{{ subscription.maxDevices }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-ink-600">Plan version</dt>
+            <dd class="mt-1 font-semibold">{{ subscription.planVersion.version }}</dd>
+          </div>
+          <div class="col-span-2">
+            <dt class="text-xs text-ink-600">Device ID</dt>
+            <dd class="mt-2 flex gap-2">
+              <input
+                class="field-control min-w-0 flex-1 font-mono uppercase"
+                type="text"
+                maxlength="120"
+                autocomplete="off"
+                [(ngModel)]="deviceIdDraft"
+                aria-label="Subscription Device ID"
+                [readonly]="!canOperate"
+              />
+              @if (canOperate) {
+                <button
+                  type="button"
+                  class="secondary-button shrink-0"
+                  [disabled]="saving() || !validDeviceIdDraft"
+                  (click)="updateDevice(subscription)"
+                >
+                  Update
+                </button>
+              }
+            </dd>
+          </div>
+        </dl>
+        <section class="border-t border-champagne-300 pt-4">
+          <div class="flex min-h-14 items-center justify-between gap-5">
+            <div>
+              <h3 class="text-sm font-bold">Owner web dashboard</h3>
+              <p class="mt-1 text-xs leading-5 text-ink-500">
+                Controls desktop synchronization, web-user access, and owner portal sessions.
+              </p>
+              <p
+                class="mt-2 text-xs font-semibold"
+                [class.text-success-700]="webDashboardDraft"
+                [class.text-danger-700]="!webDashboardDraft"
+              >
+                {{ webDashboardDraft ? 'Enabled' : 'Disabled' }}
+              </p>
+            </div>
+            <div class="flex shrink-0 items-center gap-3">
+              <input
+                name="subscription-web-dashboard"
+                type="checkbox"
+                class="size-5 accent-gold-500"
+                [(ngModel)]="webDashboardDraft"
+                [disabled]="!canAdminister || saving()"
+                aria-label="Owner web dashboard access"
+              />
+              @if (canAdminister) {
+                <button
+                  type="button"
+                  class="secondary-button"
+                  [disabled]="saving()"
+                  (click)="updateWebDashboard(subscription)"
+                >
+                  Save
+                </button>
+              }
+            </div>
+          </div>
+        </section>
+        <section class="border-t border-champagne-300 pt-4">
+          <div class="mb-3 flex items-start justify-between gap-4">
+            <div>
+              <h3 class="text-sm font-bold">Feature mods</h3>
+              <p class="mt-1 text-xs leading-5 text-ink-500">
+                Controls optional workflows in this client's POS and owner web dashboard.
+              </p>
+            </div>
+            @if (canAdminister) {
+              <button
+                type="button"
+                class="secondary-button shrink-0"
+                [disabled]="saving()"
+                (click)="updateFeatureMods(subscription)"
+              >
+                {{ saving() ? 'Saving' : 'Save mods' }}
+              </button>
+            }
+          </div>
+          <div class="space-y-5">
+            @for (group of featureModGroups; track group.label) {
+              <section>
+                <h4 class="mb-1 text-[11px] font-bold uppercase tracking-wide text-ink-500">
+                  {{ group.label }}
+                </h4>
+                <div class="divide-y divide-champagne-200">
+                  @for (feature of group.features; track feature[0]) {
+                    <label class="flex min-h-11 items-center justify-between gap-4">
+                      <span class="text-sm">{{ feature[1] }}</span>
+                      <input
+                        [name]="'subscription-feature-' + feature[0]"
+                        type="checkbox"
+                        class="size-5 shrink-0 accent-gold-500"
+                        [(ngModel)]="featureModsDraft[feature[0]]"
+                        [disabled]="!canAdminister || saving()"
+                      />
+                    </label>
+                  }
+                </div>
+              </section>
+            }
+          </div>
+        </section>
+        @if (subscription.notes) {
+          <div class="border-t border-champagne-300 pt-4">
+            <p class="text-xs text-ink-600">Notes</p>
+            <p class="mt-1 whitespace-pre-line text-sm">{{ subscription.notes }}</p>
+          </div>
+        }
+      </div>
+      @if (canOperate && subscription.status !== 'CANCELLED') {
+        <footer class="sheet-footer flex-wrap">
+          @if (canOperate && subscription.status === 'DRAFT') {
+            <button
+              type="button"
+              class="primary-button flex-1"
+              [disabled]="saving()"
+              (click)="action(subscription, 'activate')"
+            >
+              <svg lucideShieldCheck class="size-4"></svg>Activate
+            </button>
+          }
+          @if (
+            canAdminister && (subscription.status === 'ACTIVE' || subscription.status === 'GRACE')
+          ) {
+            <button
+              type="button"
+              class="secondary-button flex-1"
+              [disabled]="saving()"
+              (click)="action(subscription, 'suspend')"
+            >
+              <svg lucideCirclePause class="size-4"></svg>Suspend
+            </button>
+          }
+          @if (canAdminister && subscription.status === 'SUSPENDED') {
+            <button
+              type="button"
+              class="primary-button flex-1"
+              [disabled]="saving()"
+              (click)="action(subscription, 'reactivate')"
+            >
+              <svg lucideShieldCheck class="size-4"></svg>Reactivate
+            </button>
+          }
+          <button
+            type="button"
+            class="secondary-button flex-1"
+            [disabled]="saving()"
+            (click)="action(subscription, 'renew')"
+          >
+            <svg lucideRefreshCw class="size-4"></svg>Renew
+          </button>
+          @if (canAdminister) {
+            <button
+              type="button"
+              class="min-h-11 px-3 text-sm font-semibold text-danger-700"
+              [disabled]="saving()"
+              (click)="action(subscription, 'cancel')"
+            >
+              <svg lucideXCircle class="mr-1 inline size-4"></svg>Cancel
+            </button>
+          }
+        </footer>
+      }
+    </section>
+  </div>
+}

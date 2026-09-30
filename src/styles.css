@@ -1,0 +1,182 @@
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    background: #fff8ea;
+    color: #11100d;
+    font-family:
+      'Inter',
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      sans-serif;
+    letter-spacing: 0;
+  }
+
+  body {
+    overscroll-behavior: none;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    letter-spacing: 0;
+  }
+
+  button {
+    touch-action: manipulation;
+  }
+}
+
+@layer components {
+  .page-shell {
+    @apply mx-auto w-full max-w-[1440px] px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-10 lg:pt-8;
+  }
+
+  .page-heading {
+    @apply mb-5 flex items-end justify-between gap-3;
+  }
+
+  .page-eyebrow {
+    @apply mb-1 text-[11px] font-bold uppercase text-gold-700;
+  }
+
+  .page-title {
+    @apply text-[26px] font-bold leading-tight text-ink-950;
+  }
+
+  .page-subtitle {
+    @apply mt-1 text-sm leading-5 text-ink-600;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-xs font-semibold text-ink-800;
+  }
+
+  .field-control {
+    @apply min-h-11 w-full rounded-md border border-champagne-300 bg-white px-3 text-sm text-ink-950 outline-none transition focus:border-gold-500 focus:ring-2 focus:ring-gold-200;
+  }
+
+  .primary-button {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-gold-500 px-4 text-sm font-bold text-ink-950 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .secondary-button {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-champagne-300 bg-white px-4 text-sm font-semibold text-ink-800 transition active:bg-champagne-200 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .icon-button {
+    @apply inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-champagne-300 bg-white text-ink-600 transition active:bg-champagne-200 disabled:opacity-40;
+  }
+
+  .search-control {
+    @apply flex min-h-11 flex-1 items-center gap-2 rounded-md border border-champagne-300 bg-white px-3 focus-within:border-gold-500 focus-within:ring-2 focus-within:ring-gold-200;
+  }
+
+  .search-control input {
+    @apply min-w-0 flex-1 bg-transparent text-sm text-ink-950 outline-none placeholder:text-ink-400;
+  }
+
+  .data-list {
+    @apply overflow-hidden border-y border-champagne-300 bg-white sm:rounded-md sm:border;
+  }
+
+  .data-row {
+    @apply grid min-h-[76px] items-center gap-3 border-b border-champagne-200 px-4 py-3 text-left transition last:border-b-0 hover:bg-champagne-100/70 active:bg-champagne-100 lg:px-5;
+  }
+
+  .sidebar-link {
+    @apply flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium text-ink-200 transition hover:bg-obsidian-800 hover:text-white;
+  }
+
+  .sidebar-link-active {
+    @apply bg-obsidian-800 text-gold-300;
+  }
+
+  .status-chip {
+    @apply inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase;
+  }
+
+  .sheet-backdrop {
+    @apply fixed inset-0 z-50 flex items-end bg-black/55 sm:items-center sm:justify-center sm:p-6;
+  }
+
+  .sheet-panel {
+    @apply max-h-[92dvh] w-full overflow-y-auto rounded-t-lg bg-white shadow-lift sm:max-w-lg sm:rounded-lg;
+    animation: sheet-enter 180ms ease-out both;
+  }
+
+  .sheet-header {
+    @apply sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-champagne-300 bg-white px-5 py-4;
+  }
+
+  .sheet-body {
+    @apply space-y-4 px-5 py-5;
+  }
+
+  .sheet-footer {
+    @apply sticky bottom-0 flex gap-3 border-t border-champagne-300 bg-white px-5 py-4;
+  }
+
+  .empty-state {
+    @apply flex min-h-56 flex-col items-center justify-center px-8 text-center text-ink-600;
+  }
+
+  .loading-line {
+    @apply h-1 w-full overflow-hidden bg-champagne-200;
+  }
+
+  .loading-line::after {
+    content: '';
+    @apply block h-full w-1/3 bg-gold-500;
+    animation: loading-slide 1s ease-in-out infinite;
+  }
+}
+
+@keyframes sheet-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes loading-slide {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(410%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

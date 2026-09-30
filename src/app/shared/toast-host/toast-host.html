@@ -1,0 +1,37 @@
+<div
+  class="pointer-events-none fixed inset-x-3 top-3 z-[80] flex flex-col gap-2 sm:left-auto sm:w-96"
+>
+  @for (toast of toasts.messages(); track toast.id) {
+    <section
+      class="pointer-events-auto flex items-start gap-3 rounded-md border bg-white p-3 shadow-lift"
+      [class.border-success-700]="toast.tone === 'success'"
+      [class.border-danger-700]="toast.tone === 'error'"
+      [class.border-champagne-300]="toast.tone === 'info'"
+      role="status"
+    >
+      @if (toast.tone === 'success') {
+        <svg lucideCheckCircle2 class="mt-0.5 size-5 shrink-0 text-success-700"></svg>
+      }
+      @if (toast.tone === 'error') {
+        <svg lucideCircleAlert class="mt-0.5 size-5 shrink-0 text-danger-700"></svg>
+      }
+      @if (toast.tone === 'info') {
+        <svg lucideInfo class="mt-0.5 size-5 shrink-0 text-gold-700"></svg>
+      }
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-bold text-ink-950">{{ toast.title }}</p>
+        @if (toast.message) {
+          <p class="mt-0.5 text-xs leading-5 text-ink-600">{{ toast.message }}</p>
+        }
+      </div>
+      <button
+        type="button"
+        class="-m-1 p-2 text-ink-400"
+        aria-label="Dismiss"
+        (click)="toasts.dismiss(toast.id)"
+      >
+        <svg lucideX class="size-4"></svg>
+      </button>
+    </section>
+  }
+</div>

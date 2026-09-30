@@ -1,0 +1,49 @@
+{
+  "name": "subscriptionapp-posv2",
+  "version": "0.1.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "build:web": "ng build --configuration production",
+    "build:tauri": "ng build --configuration tauri",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "test:e2e": "playwright test",
+    "tauri": "tauri",
+    "android:init": "tauri android init",
+    "android:dev": "tauri android dev",
+    "android:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android.ps1 -Configuration Release",
+    "android:build:debug": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android.ps1 -Configuration Debug"
+  },
+  "private": true,
+  "packageManager": "npm@10.9.4",
+  "dependencies": {
+    "@angular/common": "^21.0.0",
+    "@angular/compiler": "^21.0.0",
+    "@angular/core": "^21.0.0",
+    "@angular/forms": "^21.0.0",
+    "@angular/platform-browser": "^21.0.0",
+    "@angular/router": "^21.0.0",
+    "@fontsource/inter": "^5.3.0",
+    "@lucide/angular": "^1.47.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "rxjs": "~7.8.2",
+    "tslib": "^2.8.1"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.0.0",
+    "@angular/cli": "^21.0.0",
+    "@angular/compiler-cli": "^21.0.0",
+    "@playwright/test": "^1.63.0",
+    "@tauri-apps/cli": "^2",
+    "autoprefixer": "^10.4.21",
+    "jsdom": "^29.1.1",
+    "postcss": "^8.5.6",
+    "prettier": "^3.8.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

@@ -1,0 +1,104 @@
+<main class="flex min-h-dvh items-center justify-center bg-obsidian-950 px-5 py-8">
+  <section
+    class="w-full max-w-md overflow-hidden rounded-lg border border-graphite-700 bg-white shadow-lift"
+  >
+    <header class="bg-graphite-900 px-6 py-7 text-white">
+      <img src="posv2-subscriptions-logo.svg" alt="POSV2 Subscriptions logo" class="mb-8 size-16" />
+      <p class="text-xs font-bold uppercase text-gold-300">POSV2</p>
+      <h1 class="mt-1 text-2xl font-bold">Subscription control</h1>
+      <p class="mt-2 text-sm text-ink-200">Manage clients, plans, and active subscriptions.</p>
+    </header>
+
+    <form class="space-y-4 px-6 py-6" (ngSubmit)="submit()">
+      <div>
+        <label for="username" class="field-label">Username</label>
+        <div class="relative">
+          <svg
+            lucideUserRound
+            class="pointer-events-none absolute left-3 top-3 size-5 text-ink-400"
+          ></svg>
+          <input
+            id="username"
+            name="username"
+            class="field-control pl-11"
+            [(ngModel)]="username"
+            autocomplete="username"
+            required
+          />
+        </div>
+      </div>
+
+      <div>
+        <label for="password" class="field-label">Password</label>
+        <div class="relative">
+          <svg
+            lucideLockKeyhole
+            class="pointer-events-none absolute left-3 top-3 size-5 text-ink-400"
+          ></svg>
+          <input
+            id="password"
+            name="password"
+            class="field-control px-11"
+            [type]="showPassword() ? 'text' : 'password'"
+            [(ngModel)]="password"
+            autocomplete="current-password"
+            required
+          />
+          <button
+            type="button"
+            class="absolute right-0 top-0 flex size-11 items-center justify-center text-ink-400"
+            [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+            (click)="showPassword.set(!showPassword())"
+          >
+            @if (showPassword()) {
+              <svg lucideEyeOff class="size-5"></svg>
+            } @else {
+              <svg lucideEye class="size-5"></svg>
+            }
+          </button>
+        </div>
+      </div>
+
+      @if (error()) {
+        <p class="rounded-md bg-danger-100 px-3 py-2 text-sm text-danger-700" role="alert">
+          {{ error() }}
+        </p>
+      }
+
+      <button
+        type="submit"
+        class="primary-button w-full"
+        [disabled]="auth.working() || !username.trim() || !password"
+      >
+        <span>{{ auth.working() ? 'Signing in' : 'Sign in' }}</span>
+        <svg lucideArrowRight class="size-4"></svg>
+      </button>
+
+      @if (api.canConfigureServer) {
+        <button
+          type="button"
+          class="mx-auto flex min-h-11 items-center gap-2 px-3 text-xs font-semibold text-ink-600"
+          (click)="showServer.set(!showServer())"
+        >
+          <svg lucideServer class="size-4"></svg>Server settings
+        </button>
+
+        @if (showServer()) {
+          <div class="border-t border-champagne-300 pt-4">
+            <label for="server" class="field-label">API address</label>
+            <input
+              id="server"
+              name="server"
+              class="field-control"
+              [(ngModel)]="serverUrl"
+              inputmode="url"
+            />
+            <button type="button" class="secondary-button mt-3 w-full" (click)="saveServer()">
+              Save address
+            </button>
+          </div>
+        }
+      }
+    </form>
+  </section>
+</main>

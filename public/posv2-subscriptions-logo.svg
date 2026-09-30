@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+  <title id="title">POSV2 Subscriptions</title>
+  <rect x="56" y="56" width="912" height="912" rx="220" fill="#0D0D0E" />
+  <rect
+    x="76"
+    y="76"
+    width="872"
+    height="872"
+    rx="202"
+    fill="none"
+    stroke="#343029"
+    stroke-width="20"
+  />
+  <path
+    d="M188 260h184l140 380 140-380h184L590 790c-14 31-45 51-78 51s-64-20-78-51L188 260Z"
+    fill="#D6A84F"
+  />
+  <path d="M512 640 652 260h70L558 704c-8 22-26 35-46 35V640Z" fill="#F1D58A" />
+</svg>

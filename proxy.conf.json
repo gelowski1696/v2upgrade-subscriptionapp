@@ -1,0 +1,7 @@
+{
+  "/api": {
+    "target": "https://vmjamdocuai.cloud",
+    "secure": true,
+    "changeOrigin": true
+  }
+}
