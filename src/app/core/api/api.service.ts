@@ -32,6 +32,13 @@ export class ApiService {
     return this.http.post<T>(`${this.baseUrl()}${path}`, body);
   }
 
+  browserSessionPost<T>(path: string, body: unknown = {}): Observable<T> {
+    return this.http.post<T>(`${this.baseUrl()}${path}`, body, {
+      withCredentials: true,
+      headers: { 'X-POSV2-CSRF': '1' },
+    });
+  }
+
   patch<T>(path: string, body: unknown): Observable<T> {
     return this.http.patch<T>(`${this.baseUrl()}${path}`, body);
   }

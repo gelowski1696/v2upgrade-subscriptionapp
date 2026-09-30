@@ -74,11 +74,14 @@ async function mockApi(
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    if (path.endsWith('/auth/login')) {
+    if (path.endsWith('/auth/web/refresh')) {
+      await route.fulfill(json({ message: 'Browser session is unavailable.' }, 403));
+      return;
+    }
+    if (path.endsWith('/auth/web/login')) {
       await route.fulfill(
         json({
           accessToken: 'access-token',
-          refreshToken: 'refresh-token',
           user: {
             id: '10000000-0000-4000-8000-000000000001',
             username: 'administrator',

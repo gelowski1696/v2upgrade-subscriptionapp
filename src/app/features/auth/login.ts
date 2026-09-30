@@ -28,6 +28,7 @@ import { AuthService } from '../../core/auth/auth.service';
 export class LoginPage {
   username = '';
   password = '';
+  rememberMe = false;
   serverUrl: string;
   readonly showPassword = signal(false);
   readonly showServer = signal(false);
@@ -44,7 +45,7 @@ export class LoginPage {
     if (!this.username.trim() || !this.password) return;
     this.error.set('');
     try {
-      await this.auth.login(this.username, this.password);
+      await this.auth.login(this.username, this.password, this.rememberMe);
     } catch (error) {
       this.error.set(apiErrorMessage(error, 'Sign in failed.'));
     }

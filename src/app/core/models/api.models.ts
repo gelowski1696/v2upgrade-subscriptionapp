@@ -17,7 +17,7 @@ export interface AuthenticatedUser {
 
 export interface AuthResult {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
   user: AuthenticatedUser;
 }
 

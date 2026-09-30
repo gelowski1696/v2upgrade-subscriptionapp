@@ -4,10 +4,12 @@ import { Router } from '@angular/router';
 import { catchError, from, switchMap, throwError } from 'rxjs';
 import { SessionRefreshService } from './session-refresh.service';
 import { SessionStore } from './session.store';
+import { RuntimeConfigService } from '../config/runtime-config';
 
 export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const session = inject(SessionStore);
   const sessionRefresh = inject(SessionRefreshService);
+  const config = inject(RuntimeConfigService);
   const router = inject(Router);
   const token = session.accessToken;
   const authenticatedRequest = token
@@ -19,9 +21,10 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
       const canRefresh =
         error instanceof HttpErrorResponse &&
         error.status === 401 &&
-        Boolean(session.refreshToken) &&
+        (config.platform === 'web' || Boolean(session.refreshToken)) &&
         !request.url.includes('/auth/login') &&
-        !request.url.includes('/auth/refresh');
+        !request.url.includes('/auth/refresh') &&
+        !request.url.includes('/auth/web/');
       if (canRefresh) {
         return from(sessionRefresh.refresh()).pipe(
           switchMap((refreshed) => {

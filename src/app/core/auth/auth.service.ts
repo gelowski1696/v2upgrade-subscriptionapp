@@ -2,6 +2,7 @@ import { Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../api/api.service';
+import { RuntimeConfigService } from '../config/runtime-config';
 import type { AuthResult } from '../models/api.models';
 import { SessionRefreshService } from './session-refresh.service';
 import { SessionStore } from './session.store';
@@ -9,20 +10,31 @@ import { SessionStore } from './session.store';
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   readonly working = signal(false);
+  readonly browserSessionSupported: boolean;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private restorePromise: Promise<boolean> | null = null;
 
   constructor(
     private readonly api: ApiService,
+    private readonly config: RuntimeConfigService,
     private readonly session: SessionStore,
     private readonly sessionRefresh: SessionRefreshService,
     private readonly router: Router,
-  ) {}
+  ) {
+    this.browserSessionSupported = config.platform === 'web';
+  }
 
-  async login(username: string, password: string): Promise<void> {
+  async login(username: string, password: string, rememberMe = false): Promise<void> {
     this.working.set(true);
     try {
       const result = await firstValueFrom(
-        this.api.post<AuthResult>('/auth/login', { username, password }),
+        this.browserSessionSupported
+          ? this.api.browserSessionPost<AuthResult>('/auth/web/login', {
+              username,
+              password,
+              rememberMe,
+            })
+          : this.api.post<AuthResult>('/auth/login', { username, password }),
       );
       this.acceptSession(result);
       await this.router.navigateByUrl('/dashboard');
@@ -35,11 +47,29 @@ export class AuthService {
     const refreshToken = this.session.refreshToken;
     this.clearRefreshTimer();
     this.sessionRefresh.cancel();
-    this.session.clear();
-    await this.router.navigateByUrl('/login');
-    if (refreshToken) {
-      this.api.post<void>('/auth/logout', { refreshToken }).subscribe({ error: () => undefined });
+    try {
+      if (this.browserSessionSupported) {
+        await firstValueFrom(this.api.browserSessionPost<void>('/auth/web/logout'));
+      } else if (refreshToken) {
+        await firstValueFrom(this.api.post<void>('/auth/logout', { refreshToken }));
+      }
+    } catch {
+      // Local logout must succeed even if the server is unavailable.
+    } finally {
+      this.session.clear();
+      await this.router.navigateByUrl('/login');
     }
+  }
+
+  restoreBrowserSession(): Promise<boolean> {
+    if (!this.browserSessionSupported) return Promise.resolve(false);
+    if (!this.restorePromise) {
+      this.restorePromise = this.sessionRefresh.refresh().then((restored) => {
+        if (restored) this.scheduleRefresh();
+        return restored;
+      });
+    }
+    return this.restorePromise;
   }
 
   private acceptSession(result: AuthResult): void {

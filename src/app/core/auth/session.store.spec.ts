@@ -31,4 +31,21 @@ describe('SessionStore', () => {
     expect(store.user()).toBeNull();
     expect(store.hasAnyRole('SUPER_ADMIN')).toBe(false);
   });
+
+  it('accepts a browser session without exposing a refresh token', () => {
+    const store = new SessionStore();
+
+    store.setSession({
+      accessToken: 'access-token',
+      user: {
+        id: 'user-1',
+        username: 'admin',
+        displayName: 'Subscription Admin',
+        role: 'SUPER_ADMIN',
+      },
+    });
+
+    expect(store.authenticated()).toBe(true);
+    expect(store.refreshToken).toBeNull();
+  });
 });

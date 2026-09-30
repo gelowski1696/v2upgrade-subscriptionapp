@@ -23,7 +23,7 @@ export class SessionStore {
 
   setSession(result: AuthResult): void {
     this.accessTokenState.set(result.accessToken);
-    this.refreshTokenState.set(result.refreshToken);
+    this.refreshTokenState.set(result.refreshToken ?? null);
     this.user.set(result.user);
   }
 

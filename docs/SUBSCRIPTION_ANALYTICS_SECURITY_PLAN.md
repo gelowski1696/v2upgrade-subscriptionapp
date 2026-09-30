@@ -511,6 +511,22 @@ The complete initiative is done when:
 - privacy/consent requirements and deletion/disable procedures are documented and verified;
 - Remember me uses secure cookie-based refresh semantics when that separate task is enabled.
 
+## 16. Remember-login implementation status (2026-09-30)
+
+The separate browser remember-login batch is implemented:
+
+- browser login, refresh, and logout use host-only `HttpOnly`, `Secure`, `SameSite=Strict` cookies;
+- access tokens remain in memory and refresh credentials are never exposed to Angular;
+- leaving **Remember me** off uses a browser-session cookie, while enabling it uses the configured
+  persistent duration (30 days by default);
+- refresh sessions rotate atomically, preserve session type, detect replay, and tolerate a short
+  concurrent-tab rotation window;
+- cookie-authenticated requests require the exact admin origin and the `X-POSV2-CSRF` header;
+- browser startup restores the session before protected routing, while Tauri keeps its existing
+  token-body flow; and
+- `WEB_REMEMBER_LOGIN_ENABLED` is enforced by the API, with duration and origin controls supplied
+  through deployment environment variables.
+
 ## 15. Reference standards for implementation review
 
 - Google Search Central: robots meta tags and `X-Robots-Tag`

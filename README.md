@@ -4,7 +4,7 @@ Android-first subscription administration for POSV2. The app is built with Angul
 
 ## Included workflows
 
-- Secure administrator login with automatic access-token refresh while the app is open
+- Secure administrator login with automatic access-token refresh and optional browser remember-login
 - Dashboard for active clients, plans, subscriptions, grace periods, and recent activity
 - Client search, filtering, pagination, creation, and editing
 - Plan creation, immutable versions, publishing, and archiving
@@ -133,6 +133,7 @@ Open `http://localhost:8080` and route `/api/*` to `subsapi` when testing the co
 reverse proxy. The production stack serves the application at `https://admin.vmjamdocuai.cloud`;
 see `ownerdashboard-posv2/deployment` for Compose and proxy configuration.
 
-Administrator tokens are held in memory and are not persisted in browser storage. A full page
-reload therefore requires a new sign-in. This is the documented first-release browser session
-policy.
+Administrator access tokens are held only in memory and are never persisted in browser storage.
+The browser restores access through a rotating, host-only `HttpOnly`, `Secure`, `SameSite=Strict`
+refresh cookie. Leaving **Remember me** off creates a browser-session cookie; enabling it keeps the
+browser signed in for up to 30 days. Tauri builds retain the existing in-memory token flow.
