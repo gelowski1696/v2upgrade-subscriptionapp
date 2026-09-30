@@ -266,9 +266,15 @@
     [subject]="confirmation.subscription.client.businessName"
     [subjectMeta]="confirmation.subscription.planVersion.plan.name"
     [subjectValue]="money(confirmation.subscription)"
-    [confirmLabel]="confirmation.action === 'cancel' ? 'Cancel subscription' : 'Suspend access'"
-    [cancelLabel]="confirmation.action === 'cancel' ? 'Keep subscription' : 'Keep access active'"
-    [tone]="confirmation.action === 'cancel' ? 'danger' : 'warning'"
+    [confirmLabel]="
+      confirmation.action === 'delete'
+        ? 'Delete subscription'
+        : confirmation.action === 'cancel'
+          ? 'Cancel subscription'
+          : 'Suspend access'
+    "
+    [cancelLabel]="confirmation.action === 'suspend' ? 'Keep access active' : 'Keep subscription'"
+    [tone]="confirmation.action === 'suspend' ? 'warning' : 'danger'"
     [busy]="saving()"
     (accepted)="confirmAction()"
     (dismissed)="actionConfirmation.set(null)"
@@ -445,56 +451,68 @@
           </div>
         }
       </div>
-      @if (canOperate && subscription.status !== 'CANCELLED') {
+      @if (canOperate) {
         <footer class="sheet-footer flex-wrap">
-          @if (canOperate && subscription.status === 'DRAFT') {
-            <button
-              type="button"
-              class="primary-button flex-1"
-              [disabled]="saving()"
-              (click)="action(subscription, 'activate')"
-            >
-              <svg lucideShieldCheck class="size-4"></svg>Activate
-            </button>
-          }
-          @if (
-            canAdminister && (subscription.status === 'ACTIVE' || subscription.status === 'GRACE')
-          ) {
+          @if (subscription.status !== 'CANCELLED') {
+            @if (subscription.status === 'DRAFT') {
+              <button
+                type="button"
+                class="primary-button flex-1"
+                [disabled]="saving()"
+                (click)="action(subscription, 'activate')"
+              >
+                <svg lucideShieldCheck class="size-4"></svg>Activate
+              </button>
+            }
+            @if (
+              canAdminister && (subscription.status === 'ACTIVE' || subscription.status === 'GRACE')
+            ) {
+              <button
+                type="button"
+                class="secondary-button flex-1"
+                [disabled]="saving()"
+                (click)="action(subscription, 'suspend')"
+              >
+                <svg lucideCirclePause class="size-4"></svg>Suspend
+              </button>
+            }
+            @if (canAdminister && subscription.status === 'SUSPENDED') {
+              <button
+                type="button"
+                class="primary-button flex-1"
+                [disabled]="saving()"
+                (click)="action(subscription, 'reactivate')"
+              >
+                <svg lucideShieldCheck class="size-4"></svg>Reactivate
+              </button>
+            }
             <button
               type="button"
               class="secondary-button flex-1"
               [disabled]="saving()"
-              (click)="action(subscription, 'suspend')"
+              (click)="action(subscription, 'renew')"
             >
-              <svg lucideCirclePause class="size-4"></svg>Suspend
+              <svg lucideRefreshCw class="size-4"></svg>Renew
             </button>
+            @if (canAdminister) {
+              <button
+                type="button"
+                class="min-h-11 px-3 text-sm font-semibold text-danger-700"
+                [disabled]="saving()"
+                (click)="action(subscription, 'cancel')"
+              >
+                <svg lucideXCircle class="mr-1 inline size-4"></svg>Cancel
+              </button>
+            }
           }
-          @if (canAdminister && subscription.status === 'SUSPENDED') {
-            <button
-              type="button"
-              class="primary-button flex-1"
-              [disabled]="saving()"
-              (click)="action(subscription, 'reactivate')"
-            >
-              <svg lucideShieldCheck class="size-4"></svg>Reactivate
-            </button>
-          }
-          <button
-            type="button"
-            class="secondary-button flex-1"
-            [disabled]="saving()"
-            (click)="action(subscription, 'renew')"
-          >
-            <svg lucideRefreshCw class="size-4"></svg>Renew
-          </button>
           @if (canAdminister) {
             <button
               type="button"
-              class="min-h-11 px-3 text-sm font-semibold text-danger-700"
+              class="danger-button flex-1"
               [disabled]="saving()"
-              (click)="action(subscription, 'cancel')"
+              (click)="requestDelete(subscription)"
             >
-              <svg lucideXCircle class="mr-1 inline size-4"></svg>Cancel
+              <svg lucideTrash2 class="size-4"></svg>Delete
             </button>
           }
         </footer>

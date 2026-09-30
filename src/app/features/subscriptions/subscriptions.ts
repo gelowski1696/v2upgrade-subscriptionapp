@@ -9,6 +9,7 @@ import {
   LucideRefreshCw,
   LucideSearch,
   LucideShieldCheck,
+  LucideTrash2,
   LucideX,
   LucideXCircle,
 } from '@lucide/angular';
@@ -43,7 +44,7 @@ interface SubscriptionForm {
 }
 
 type SubscriptionAction = 'activate' | 'suspend' | 'reactivate' | 'cancel' | 'renew';
-type ConfirmedSubscriptionAction = Extract<SubscriptionAction, 'suspend' | 'cancel'>;
+type ConfirmedSubscriptionAction = Extract<SubscriptionAction, 'suspend' | 'cancel'> | 'delete';
 
 interface SubscriptionConfirmation {
   subscription: SubscriptionRecord;
@@ -62,6 +63,7 @@ interface SubscriptionConfirmation {
     LucideRefreshCw,
     LucideSearch,
     LucideShieldCheck,
+    LucideTrash2,
     LucideX,
     LucideXCircle,
     ConfirmDialogComponent,
@@ -225,14 +227,27 @@ export class SubscriptionsPage implements OnInit {
   async confirmAction(): Promise<void> {
     const confirmation = this.actionConfirmation();
     if (!confirmation || this.saving()) return;
+    if (confirmation.action === 'delete') {
+      await this.deleteSubscription(confirmation.subscription);
+      return;
+    }
     await this.performAction(confirmation.subscription, confirmation.action);
   }
 
+  requestDelete(subscription: SubscriptionRecord): void {
+    if (!this.canAdminister || this.saving()) return;
+    this.actionConfirmation.set({ subscription, action: 'delete' });
+  }
+
   confirmationTitle(action: ConfirmedSubscriptionAction): string {
+    if (action === 'delete') return 'Delete subscription?';
     return action === 'cancel' ? 'Cancel subscription?' : 'Suspend subscription?';
   }
 
   confirmationDescription(action: ConfirmedSubscriptionAction): string {
+    if (action === 'delete') {
+      return 'This removes the subscription from the app and revokes its license and device access. Finance and audit records are retained. This cannot be undone.';
+    }
     return action === 'cancel'
       ? 'This permanently ends the subscription and it cannot be reactivated.'
       : 'POS access will stop until an administrator reactivates the subscription.';
@@ -262,6 +277,25 @@ export class SubscriptionsPage implements OnInit {
     } catch (error) {
       this.toasts.show(
         'Action could not be completed',
+        'error',
+        apiErrorMessage(error, 'Try again.'),
+      );
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  private async deleteSubscription(subscription: SubscriptionRecord): Promise<void> {
+    this.saving.set(true);
+    try {
+      await firstValueFrom(this.api.delete(`/subscriptions/${subscription.id}`));
+      this.actionConfirmation.set(null);
+      this.selected.set(null);
+      this.toasts.show('Subscription deleted', 'success');
+      await this.load();
+    } catch (error) {
+      this.toasts.show(
+        'Subscription could not be deleted',
         'error',
         apiErrorMessage(error, 'Try again.'),
       );

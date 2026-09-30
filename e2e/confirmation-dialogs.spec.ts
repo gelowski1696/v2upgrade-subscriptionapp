@@ -45,6 +45,12 @@ test('replaces browser confirmations across administration flows', async ({ page
   await expect(dialog.getByText(/cannot be reactivated/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Keep subscription' }).click();
   await expect(dialog).toBeHidden();
+
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  dialog = page.getByRole('alertdialog', { name: 'Delete subscription?' });
+  await expect(dialog.getByText(/Finance and audit records are retained/)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Delete subscription' }).click();
+  await expect(page.getByRole('status').getByText('Subscription deleted')).toBeVisible();
 });
 
 async function signIn(page: Page): Promise<void> {
@@ -95,6 +101,10 @@ async function mockApi(page: Page): Promise<void> {
     }
     if (path.endsWith('/subscriptions') && request.method() === 'GET') {
       await route.fulfill(json(pageOf(subscription())));
+      return;
+    }
+    if (/\/subscriptions\/[^/]+$/.test(path) && request.method() === 'DELETE') {
+      await route.fulfill(json({ deleted: true, deletedAt: '2026-09-30T10:00:00.000Z' }));
       return;
     }
     await route.fulfill(json({ message: 'Not found' }, 404));

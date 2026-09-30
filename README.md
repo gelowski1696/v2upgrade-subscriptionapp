@@ -8,7 +8,7 @@ Android-first subscription administration for POSV2. The app is built with Angul
 - Dashboard for active clients, plans, subscriptions, grace periods, and recent activity
 - Client search, filtering, pagination, creation, and editing
 - Plan creation, immutable versions, publishing, and archiving
-- Subscription creation, activation, suspension, reactivation, renewal, and cancellation
+- Subscription creation, activation, suspension, reactivation, renewal, cancellation, and audited deletion
 - Plan defaults and per-subscription control for all POS and owner-dashboard Feature Mods
 - Subscription finance analytics for collected payments, revenue by plan, expenses, and net income
 - Payment recording and an auditable expense ledger for operating costs
