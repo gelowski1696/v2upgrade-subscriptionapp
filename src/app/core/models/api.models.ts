@@ -185,6 +185,32 @@ export interface WebAnalyticsOverview {
   scope: { clientId: string | null; storeId: string | null };
   generatedAt: string;
   metricVersion: string;
+  environment: string;
+  health: {
+    status: 'OPERATIONAL';
+    api: {
+      version: string;
+      release: string;
+      uptimeSeconds: number;
+      database: 'AVAILABLE';
+    };
+    ownerDashboard: {
+      observedRelease: string | null;
+      latestSignalAt: string | null;
+    };
+    historicalAvailabilityAvailable: boolean;
+  };
+  collection: {
+    state: 'ACTIVE' | 'PARTIAL' | 'DISABLED';
+    activeClients: number;
+    enabledClients: number;
+    realUserMonitoringEnabled: boolean;
+    retentionDays: number;
+  };
+  privacy: {
+    minimumGroupSize: number;
+    breakdownsSuppressed: boolean;
+  };
   summary: {
     activeUsers: number;
     sessions: number;

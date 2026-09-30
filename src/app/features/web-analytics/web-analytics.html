@@ -94,6 +94,70 @@
 
   @if (data(); as report) {
     <div class="analytics-content" [class.opacity-60]="loading()">
+      <section class="health-rail" aria-labelledby="analytics-health-heading">
+        <div class="health-primary">
+          <p class="health-label">Current health</p>
+          <h2 id="analytics-health-heading">
+            <span class="health-dot" aria-hidden="true"></span>API operational
+          </h2>
+          <p>
+            Database available · uptime {{ uptime(report.health.api.uptimeSeconds) }} · live status
+            only
+          </p>
+        </div>
+        <dl class="health-details">
+          <div>
+            <dt>API release</dt>
+            <dd>{{ report.health.api.release }}</dd>
+          </div>
+          <div>
+            <dt>Observed web</dt>
+            <dd>{{ report.health.ownerDashboard.observedRelease || 'No signal yet' }}</dd>
+          </div>
+          <div>
+            <dt>Collection</dt>
+            <dd [attr.data-state]="report.collection.state">
+              {{ collectionLabel(report.collection.state) }}
+            </dd>
+          </div>
+          <div>
+            <dt>Environment</dt>
+            <dd>{{ label(report.environment) }}</dd>
+          </div>
+        </dl>
+      </section>
+
+      @if (report.collection.state !== 'ACTIVE') {
+        <section class="analytics-notice" role="status">
+          <svg lucideTriangleAlert class="size-5 shrink-0"></svg>
+          <p>
+            @if (report.collection.state === 'DISABLED') {
+              Analytics collection is disabled. Existing retained data remains visible.
+            } @else {
+              Collection is enabled for {{ report.collection.enabledClients }} of
+              {{ report.collection.activeClients }} active clients, so totals are partial.
+            }
+          </p>
+        </section>
+      }
+
+      @if (!report.collection.realUserMonitoringEnabled) {
+        <section class="analytics-notice" role="status">
+          <svg lucideGauge class="size-5 shrink-0"></svg>
+          <p>Real-user performance and browser-error collection is currently disabled.</p>
+        </section>
+      }
+
+      @if (report.privacy.breakdownsSuppressed) {
+        <section class="analytics-notice" role="status">
+          <svg lucideShieldCheck class="size-5 shrink-0"></svg>
+          <p>
+            Detailed breakdowns are hidden because this scope has fewer than
+            {{ report.privacy.minimumGroupSize }} active users.
+          </p>
+        </section>
+      }
+
       <section aria-labelledby="analytics-status-heading">
         <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
           <div>
@@ -306,6 +370,7 @@
                   <th>Release</th>
                   <th>Count</th>
                   <th>Sessions</th>
+                  <th>First seen</th>
                   <th>Last seen</th>
                 </tr>
               </thead>
@@ -320,6 +385,7 @@
                     <td class="font-mono text-xs">{{ issue.appRelease }}</td>
                     <td class="tabular-nums">{{ issue.count }}</td>
                     <td class="tabular-nums">{{ issue.affectedSessions }}</td>
+                    <td>{{ timestamp(issue.firstSeenAt) }}</td>
                     <td>{{ timestamp(issue.lastSeenAt) }}</td>
                   </tr>
                 }
@@ -340,7 +406,9 @@
         <svg lucideShieldCheck class="mt-0.5 size-4 shrink-0 text-success-700"></svg>
         <p>
           Aggregates exclude usernames, emails, IP addresses, query strings, form values, and POS
-          business records. Metrics version {{ report.metricVersion }}.
+          business records. Groups require at least {{ report.privacy.minimumGroupSize }} users or
+          sessions. Raw signals are retained for {{ report.collection.retentionDays }} days. Metrics
+          version {{ report.metricVersion }}.
         </p>
       </footer>
     </div>

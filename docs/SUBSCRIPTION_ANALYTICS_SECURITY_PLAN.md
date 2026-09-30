@@ -1,6 +1,6 @@
 # Owner Web Dashboard Readiness and Web Analytics Plan
 
-**Status:** In progress - browser collection, protected aggregate reporting, and the first read-only subscription analytics workspace are implemented locally  
+**Status:** In progress - the Phase 3 analytics MVP and operational-status hardening are implemented; secure Remember login and Stage 4 rollout remain pending
 **Prepared:** 2026-09-30  
 **Delivery order:** Owner web dashboard first, then analytics visibility in the subscription app  
 **Applies to:** `ownerdashboard-posv2`, `subsapi`, and `subscriptionapp-posv2`
@@ -61,13 +61,16 @@ The first recommended security steps are deployed, and the next operations batch
 - the authenticated owner dashboard now batches normalized report page views, allowlisted feature usage, sanitized global frontend errors, and LCP/INP/CLS samples without blocking normal application work;
 - a `SUPER_ADMIN`-only, audited aggregate overview endpoint returns summary counts, daily usage, top routes/features, Web Vital p75 values with sample warnings, and sanitized error groups without exposing raw events or user identities;
 - the subscription app now has a lazy-loaded, `SUPER_ADMIN`-only Website Analytics workspace with client/store/date filters, a dominant usage trend, accessible tabular equivalents, adoption rankings, Web Vital sample warnings, sanitized issue groups, and responsive desktop/mobile layouts;
-- builds, 85 API tests, 6 subscription-app unit tests, 4 subscription-app browser tests, and 62 owner-dashboard browser tests pass.
+- the owner dashboard now emits allowlisted API-failure signals with safe operation templates, status classes, and error codes while excluding analytics-ingestion failures from the feedback loop;
+- global API-enforced switches now control owner web collection, real-user monitoring, and subscription-app analytics visibility in addition to the existing tenant collection switch;
+- the subscription analytics workspace now shows current API/database health, API and observed web releases, uptime, environment, collection coverage, retention, first/last issue sightings, partial/disabled collection notices, and privacy suppression below a three-user/session threshold;
+- builds, 92 API tests, 6 subscription-app unit tests, 8 subscription-app browser tests, and 62 owner-dashboard browser tests pass.
 
 Still pending are CSP nonce/Trusted Types tightening, MFA, bundle splitting, off-server backup
 replication, and broader manual accessibility review. Backup and restore drills now pass; recurring
-backup scheduling and off-server replication were intentionally deferred. API-failure instrumentation,
-availability/server-metric reporting, controlled production data reconciliation, feature-flag rollout,
-and broader role access remain Phase 2/3 work.
+backup scheduling and off-server replication were intentionally deferred. Historical availability and
+server latency reporting, controlled production data reconciliation, trend-to-detail interaction,
+secure subscription-app Remember login, and broader role access remain Phase 3/4 work.
 
 ### Owner dashboard
 
@@ -234,12 +237,12 @@ Do not begin broad analytics collection until:
 
 Keep these separate in collection and reporting:
 
-| Category | Examples | Source |
-| --- | --- | --- |
-| Product usage | Page views, sessions, active users, routes, feature use | Owner dashboard browser |
-| Real-user monitoring | LCP, INP, CLS, navigation timing, frontend errors | Owner dashboard browser |
-| API operations | Request count, status class, latency, auth failures | `subsapi` server |
-| Availability | Uptime, health checks, certificate state | External monitor/edge |
+| Category             | Examples                                                | Source                  |
+| -------------------- | ------------------------------------------------------- | ----------------------- |
+| Product usage        | Page views, sessions, active users, routes, feature use | Owner dashboard browser |
+| Real-user monitoring | LCP, INP, CLS, navigation timing, frontend errors       | Owner dashboard browser |
+| API operations       | Request count, status class, latency, auth failures     | `subsapi` server        |
+| Availability         | Uptime, health checks, certificate state                | External monitor/edge   |
 
 The subscription app may present them together, but the labels must make the source and meaning clear.
 
@@ -371,14 +374,14 @@ Every response should include:
 
 Authorization proposal:
 
-| Capability | OPERATOR | ADMIN | SUPER_ADMIN |
-| --- | ---: | ---: | ---: |
-| Overall uptime and release health | Read | Read | Read |
-| Aggregated usage/performance | Optional | Read | Read |
-| Filter by client/store | No by default | Authorized scope only | Read |
-| View sanitized error groups | No | Read | Read |
-| View raw events | No | No | Emergency-only backend access |
-| Change retention/collection | No | No | Controlled configuration |
+| Capability                        |      OPERATOR |                 ADMIN |                   SUPER_ADMIN |
+| --------------------------------- | ------------: | --------------------: | ----------------------------: |
+| Overall uptime and release health |          Read |                  Read |                          Read |
+| Aggregated usage/performance      |      Optional |                  Read |                          Read |
+| Filter by client/store            | No by default | Authorized scope only |                          Read |
+| View sanitized error groups       |            No |                  Read |                          Read |
+| View raw events                   |            No |                    No | Emergency-only backend access |
+| Change retention/collection       |            No |                    No |      Controlled configuration |
 
 Every cross-client analytics query must be role checked and audited. The UI must not be the authorization boundary.
 

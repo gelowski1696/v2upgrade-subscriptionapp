@@ -7,6 +7,9 @@ test('shows privacy-safe website analytics to super administrators', async ({ pa
 
   await expect(page.getByRole('heading', { name: 'Website analytics' })).toBeVisible();
   await expect(page.getByText('42', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'API operational' })).toBeVisible();
+  await expect(page.getByText('api1234', { exact: true })).toBeVisible();
+  await expect(page.getByText('web1234', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Page views by day' })).toBeVisible();
   await expect(page.getByText('Sales', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Low sample').first()).toBeVisible();
@@ -33,6 +36,28 @@ test('redirects non-super administrators away from website analytics', async ({ 
   await expect(page.getByRole('heading', { name: /Good day/ })).toBeVisible();
 });
 
+test('explains partial collection and privacy-suppressed details', async ({ page }) => {
+  const overview = analyticsOverview();
+  overview.collection = {
+    ...overview.collection,
+    state: 'PARTIAL',
+    activeClients: 4,
+    enabledClients: 2,
+  };
+  overview.privacy = { minimumGroupSize: 3, breakdownsSuppressed: true };
+  overview.routes = [];
+  overview.features = [];
+  overview.performance = [];
+  overview.errors = [];
+  await mockApi(page, 'SUPER_ADMIN', overview);
+  await signIn(page);
+  await page.locator('a[href="/web-analytics"]:visible').click();
+
+  await expect(page.getByText(/enabled for 2 of 4 active clients/)).toBeVisible();
+  await expect(page.getByText(/fewer than 3 active users/)).toBeVisible();
+  await expect(page.getByText('No route activity yet.')).toBeVisible();
+});
+
 async function signIn(page: Page): Promise<void> {
   await page.goto('/login');
   await page.getByLabel('Username').fill('administrator');
@@ -41,7 +66,11 @@ async function signIn(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
-async function mockApi(page: Page, role: 'SUPER_ADMIN' | 'ADMIN'): Promise<void> {
+async function mockApi(
+  page: Page,
+  role: 'SUPER_ADMIN' | 'ADMIN',
+  overview = analyticsOverview(),
+): Promise<void> {
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -87,7 +116,7 @@ async function mockApi(page: Page, role: 'SUPER_ADMIN' | 'ADMIN'): Promise<void>
       return;
     }
     if (path.endsWith('/admin/web-analytics/overview')) {
-      await route.fulfill(json(analyticsOverview()));
+      await route.fulfill(json(overview));
       return;
     }
     if (/\/(clients|plans|subscriptions)$/.test(path)) {
@@ -104,6 +133,29 @@ function analyticsOverview() {
     scope: { clientId: null, storeId: null },
     generatedAt: '2026-09-30T02:00:00.000Z',
     metricVersion: '1.0',
+    environment: 'production',
+    health: {
+      status: 'OPERATIONAL',
+      api: {
+        version: '0.0.1',
+        release: 'api1234',
+        uptimeSeconds: 86400,
+        database: 'AVAILABLE',
+      },
+      ownerDashboard: {
+        observedRelease: 'web1234',
+        latestSignalAt: '2026-09-30T01:55:00.000Z',
+      },
+      historicalAvailabilityAvailable: false,
+    },
+    collection: {
+      state: 'ACTIVE',
+      activeClients: 1,
+      enabledClients: 1,
+      realUserMonitoringEnabled: true,
+      retentionDays: 90,
+    },
+    privacy: { minimumGroupSize: 3, breakdownsSuppressed: false },
     summary: {
       activeUsers: 42,
       sessions: 58,
@@ -156,7 +208,7 @@ function analyticsOverview() {
         errorCode: 'UNHANDLED_FRONTEND_ERROR',
         appRelease: '810464f',
         count: 3,
-        affectedSessions: 2,
+        affectedSessions: 3,
         firstSeenAt: '2026-09-29T08:00:00.000Z',
         lastSeenAt: '2026-09-30T01:30:00.000Z',
       },

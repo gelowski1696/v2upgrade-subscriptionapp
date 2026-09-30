@@ -136,6 +136,18 @@ export class WebAnalyticsPage {
     }).format(new Date(value));
   }
 
+  uptime(seconds: number): string {
+    const days = Math.floor(seconds / 86_400);
+    const hours = Math.floor((seconds % 86_400) / 3_600);
+    if (days) return `${days}d ${hours}h`;
+    const minutes = Math.max(1, Math.floor(seconds / 60));
+    return `${minutes}m`;
+  }
+
+  collectionLabel(state: WebAnalyticsOverview['collection']['state']): string {
+    return state === 'ACTIVE' ? 'Active' : state === 'PARTIAL' ? 'Partial' : 'Disabled';
+  }
+
   label(value: string): string {
     return value
       .replace(/^\/dashboard\//, '')
