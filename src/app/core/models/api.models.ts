@@ -22,6 +22,18 @@ export interface AuthResult {
 }
 
 export type ClientStatus = 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+export type ClientGroupStatus = 'ACTIVE' | 'ARCHIVED';
+
+export interface ClientGroupRecord {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  status: ClientGroupStatus;
+  clientCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface ClientRecord {
   id: string;
@@ -33,6 +45,8 @@ export interface ClientRecord {
   address: string | null;
   notes: string | null;
   status: ClientStatus;
+  groupId: string | null;
+  group: Pick<ClientGroupRecord, 'id' | 'code' | 'name' | 'status'> | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,6 +112,25 @@ export interface SubscriptionRecord {
   };
 }
 
+export interface SubscriptionRenewalRecord {
+  id: string;
+  subscriptionId: string;
+  previousExpiresAt: string | null;
+  periodStartsAt: string;
+  periodEndsAt: string;
+  amount: string;
+  currency: string;
+  billingInterval: BillingInterval;
+  reason: string | null;
+  createdById: string;
+  createdAt: string;
+}
+
+export interface SubscriptionRenewalResult {
+  subscription: SubscriptionRecord;
+  renewal: SubscriptionRenewalRecord;
+}
+
 export type ExpenseCategory =
   | 'INFRASTRUCTURE'
   | 'SOFTWARE'
@@ -122,6 +155,35 @@ export interface ExpenseRecord {
   updatedAt: string;
 }
 
+export type PaymentPurpose = 'INITIAL' | 'RENEWAL' | 'MODIFICATION' | 'OTHER';
+
+export interface PaymentRecord {
+  id: string;
+  subscriptionId: string | null;
+  renewalId: string | null;
+  purpose: PaymentPurpose;
+  description: string | null;
+  amount: string;
+  currency: string;
+  reference: string | null;
+  paidAt: string;
+  notes: string | null;
+  status: 'POSTED' | 'VOIDED';
+  voidedAt: string | null;
+  voidReason: string | null;
+  client: {
+    id: string;
+    businessName: string;
+    group: { id: string; code: string; name: string } | null;
+  };
+  plan: { id: string; name: string } | null;
+  renewal: {
+    id: string;
+    periodStartsAt: string;
+    periodEndsAt: string;
+  } | null;
+}
+
 export interface FinanceOverview {
   range: { from: string; to: string; timezone: 'UTC'; currency: string };
   summary: {
@@ -143,20 +205,12 @@ export interface FinanceOverview {
     revenue: number;
     payments: number;
   }>;
-  recentPayments: Array<{
-    id: string;
-    subscriptionId: string;
-    amount: string;
-    currency: string;
-    reference: string | null;
-    paidAt: string;
-    notes: string | null;
-    status: 'POSTED' | 'VOIDED';
-    voidedAt: string | null;
-    voidReason: string | null;
-    client: { id: string; businessName: string };
-    plan: { id: string; name: string };
+  byPurpose: Array<{
+    purpose: PaymentPurpose;
+    revenue: number;
+    payments: number;
   }>;
+  recentPayments: PaymentRecord[];
 }
 
 export interface ApiFailure {

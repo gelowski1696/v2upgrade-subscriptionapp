@@ -174,16 +174,18 @@
           </section>
 
           <section>
-            <p class="page-eyebrow">Plans</p>
-            <h2 class="mb-3 text-lg font-bold">Revenue by plan</h2>
+            <p class="page-eyebrow">Collections</p>
+            <h2 class="mb-3 text-lg font-bold">Revenue by purpose</h2>
             <div class="data-list">
-              @for (plan of report.byPlan; track plan.planId) {
+              @for (purpose of report.byPurpose; track purpose.purpose) {
                 <div class="data-row grid-cols-[1fr_auto]">
                   <div class="min-w-0">
-                    <p class="truncate text-sm font-bold">{{ plan.planName }}</p>
-                    <p class="mt-1 text-xs text-ink-400">{{ plan.payments }} payments</p>
+                    <p class="truncate text-sm font-bold">
+                      {{ paymentPurposeLabel(purpose.purpose) }}
+                    </p>
+                    <p class="mt-1 text-xs text-ink-400">{{ purpose.payments }} payments</p>
                   </div>
-                  <p class="text-sm font-bold tabular-nums">{{ money(plan.revenue) }}</p>
+                  <p class="text-sm font-bold tabular-nums">{{ money(purpose.revenue) }}</p>
                 </div>
               } @empty {
                 <div class="empty-state min-h-44">
@@ -218,8 +220,33 @@
               <svg lucideCircleDollarSign class="size-4"></svg><span>Record payment</span>
             </button>
           </div>
+          <div
+            class="mb-3 flex flex-wrap items-end gap-3 border-y border-champagne-300 bg-white px-3 py-3 sm:rounded-md sm:border"
+          >
+            <label class="min-w-40 flex-1 sm:max-w-56">
+              <span class="field-label">Client group</span>
+              <select class="field-control" [(ngModel)]="groupFilter">
+                <option value="">All groups</option>
+                @for (group of groups(); track group.id) {
+                  <option [value]="group.id">{{ group.name }}</option>
+                }
+              </select>
+            </label>
+            <label class="min-w-40 flex-1 sm:max-w-56">
+              <span class="field-label">Payment purpose</span>
+              <select class="field-control" [(ngModel)]="purposeFilter">
+                <option value="">All purposes</option>
+                @for (purpose of paymentPurposes; track purpose.value) {
+                  <option [value]="purpose.value">{{ purpose.label }}</option>
+                }
+              </select>
+            </label>
+            <button type="button" class="primary-button" [disabled]="loading()" (click)="load()">
+              Apply filters
+            </button>
+          </div>
           <div class="data-list">
-            @for (payment of report.recentPayments; track payment.id) {
+            @for (payment of payments(); track payment.id) {
               <div
                 class="data-row grid-cols-[1fr_auto]"
                 [class.opacity-70]="payment.status === 'VOIDED'"
@@ -232,8 +259,19 @@
                     }
                   </div>
                   <p class="mt-1 truncate text-xs text-ink-600">
-                    {{ payment.plan.name }} · {{ date(payment.paidAt) }}
+                    {{ paymentPurposeLabel(payment.purpose) }} ·
+                    {{ payment.plan?.name || 'Client payment' }} · {{ date(payment.paidAt) }}
                   </p>
+                  @if (payment.description) {
+                    <p class="mt-1 truncate text-[11px] text-ink-500">
+                      {{ payment.description }}
+                    </p>
+                  }
+                  @if (payment.client.group) {
+                    <p class="mt-1 truncate text-[11px] text-ink-400">
+                      {{ payment.client.group.name }}
+                    </p>
+                  }
                   @if (payment.reference) {
                     <p class="mt-1 truncate text-[11px] text-ink-400">
                       Ref {{ payment.reference }}
@@ -516,7 +554,8 @@
           <div class="min-w-0">
             <p class="truncate text-sm font-bold">{{ item.payment.client.businessName }}</p>
             <p class="mt-1 text-xs text-ink-600">
-              {{ item.payment.plan.name }} · {{ date(item.payment.paidAt) }}
+              {{ item.payment.plan?.name || paymentPurposeLabel(item.payment.purpose) }} ·
+              {{ date(item.payment.paidAt) }}
             </p>
           </div>
           <p class="shrink-0 text-sm font-bold tabular-nums text-success-700">
@@ -596,24 +635,85 @@
       </header>
       <form (ngSubmit)="savePayment()">
         <div class="sheet-body">
-          <label
-            ><span class="field-label">Subscription *</span
-            ><select
+          <label>
+            <span class="field-label">Client *</span>
+            <select
               data-dialog-initial-focus
+              name="paymentClient"
+              class="field-control"
+              [(ngModel)]="paymentForm.clientId"
+              (ngModelChange)="paymentClientChanged()"
+              required
+            >
+              <option value="" disabled>Select client</option>
+              @for (client of clients(); track client.id) {
+                <option [value]="client.id">{{ client.businessName }} ({{ client.code }})</option>
+              }
+            </select>
+          </label>
+          <label>
+            <span class="field-label">Purpose *</span>
+            <select
+              name="paymentPurpose"
+              class="field-control"
+              [(ngModel)]="paymentForm.purpose"
+              (ngModelChange)="paymentPurposeChanged()"
+              required
+            >
+              @for (purpose of paymentPurposes; track purpose.value) {
+                <option [value]="purpose.value">{{ purpose.label }}</option>
+              }
+            </select>
+          </label>
+          <label
+            ><span class="field-label"
+              >Subscription {{ paymentForm.purpose === 'RENEWAL' ? '*' : '(optional)' }}</span
+            ><select
               name="paymentSubscription"
               class="field-control"
               [(ngModel)]="paymentForm.subscriptionId"
               (ngModelChange)="paymentSubscriptionChanged()"
-              required
+              [required]="paymentForm.purpose === 'RENEWAL'"
             >
-              <option value="" disabled>Select subscription</option>
-              @for (subscription of subscriptions(); track subscription.id) {
+              <option value="">No subscription</option>
+              @for (subscription of paymentSubscriptions(); track subscription.id) {
                 <option [value]="subscription.id">
-                  {{ subscription.client.businessName }} · {{ subscription.planVersion.plan.name }}
+                  {{ subscription.planVersion.plan.name }} · ends
+                  {{ date(subscription.expiresAt || subscription.startsAt) }}
                 </option>
               }
             </select></label
           >
+          @if (paymentForm.purpose === 'RENEWAL' && renewals().length) {
+            <label>
+              <span class="field-label">Renewal period (optional)</span>
+              <select
+                name="paymentRenewal"
+                class="field-control"
+                [(ngModel)]="paymentForm.renewalId"
+              >
+                <option value="">No specific renewal</option>
+                @for (renewal of renewals(); track renewal.id) {
+                  <option [value]="renewal.id">
+                    {{ date(renewal.periodStartsAt) }} – {{ date(renewal.periodEndsAt) }}
+                  </option>
+                }
+              </select>
+            </label>
+          }
+          @if (paymentForm.purpose === 'MODIFICATION' || paymentForm.purpose === 'OTHER') {
+            <label>
+              <span class="field-label">Description *</span>
+              <input
+                name="paymentDescription"
+                class="field-control"
+                maxlength="250"
+                placeholder="What was this payment for?"
+                [(ngModel)]="paymentForm.description"
+                required
+              />
+            </label>
+          }
           <div class="grid gap-4 sm:grid-cols-2">
             <label
               ><span class="field-label">Amount *</span

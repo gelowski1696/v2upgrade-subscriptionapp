@@ -281,6 +281,159 @@
   />
 }
 
+@if (renewalTarget(); as renewalSubscription) {
+  <div class="sheet-backdrop z-[70]" (click)="!saving() && renewalTarget.set(null)">
+    <section
+      appDialogFocus
+      class="sheet-panel max-w-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="renewal-title"
+      (dialogEscape)="!saving() && renewalTarget.set(null)"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="sheet-header">
+        <div>
+          <p class="page-eyebrow">Subscription renewal</p>
+          <h2 id="renewal-title" class="text-xl font-bold">
+            {{ lastRenewal() ? 'Renewal completed' : 'Confirm renewal' }}
+          </h2>
+        </div>
+        <button
+          type="button"
+          class="icon-button"
+          aria-label="Close"
+          [disabled]="saving()"
+          (click)="renewalTarget.set(null)"
+        >
+          <svg lucideX class="size-5"></svg>
+        </button>
+      </header>
+
+      @if (lastRenewal(); as completedRenewal) {
+        <div class="sheet-body">
+          <p class="text-sm leading-6 text-ink-600">
+            Coverage was extended and the original subscription start date was preserved.
+          </p>
+          <dl class="grid grid-cols-2 gap-4 border-y border-champagne-300 py-4 text-sm">
+            <div>
+              <dt class="text-xs text-ink-500">Original start</dt>
+              <dd class="mt-1 font-semibold">{{ date(renewalSubscription.startsAt) }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-ink-500">New expiry</dt>
+              <dd class="mt-1 font-semibold">{{ date(completedRenewal.periodEndsAt) }}</dd>
+            </div>
+          </dl>
+        </div>
+        <footer class="sheet-footer">
+          <button type="button" class="secondary-button flex-1" (click)="renewalTarget.set(null)">
+            Close
+          </button>
+          <button type="button" class="primary-button flex-1" (click)="recordRenewalPayment()">
+            Record renewal payment
+          </button>
+        </footer>
+      } @else {
+        <form (ngSubmit)="confirmRenewal()">
+          <div class="sheet-body">
+            <p class="text-sm leading-6 text-ink-600">
+              Review the coverage period before renewing. The original start date will not change.
+            </p>
+            <dl class="grid grid-cols-2 gap-4 border-y border-champagne-300 py-4 text-sm">
+              <div>
+                <dt class="text-xs text-ink-500">Original start</dt>
+                <dd class="mt-1 font-semibold">{{ date(renewalSubscription.startsAt) }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-ink-500">Current expiry</dt>
+                <dd class="mt-1 font-semibold">{{ date(renewalSubscription.expiresAt) }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-ink-500">Plan</dt>
+                <dd class="mt-1 font-semibold">{{ renewalSubscription.planVersion.plan.name }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-ink-500">Renewal amount</dt>
+                <dd class="mt-1 font-semibold tabular-nums">{{ money(renewalSubscription) }}</dd>
+              </div>
+            </dl>
+
+            @if (canAdminister && renewalSubscription.billingInterval !== 'CUSTOM') {
+              <label class="flex min-h-11 items-center gap-3 text-sm font-semibold">
+                <input
+                  type="checkbox"
+                  name="renewalOverride"
+                  class="size-5 accent-gold-500"
+                  [(ngModel)]="renewalOverride"
+                />
+                Override calculated renewal dates
+              </label>
+            }
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label>
+                <span class="field-label">Renewal period start</span>
+                <input
+                  data-dialog-initial-focus
+                  name="renewalPeriodStart"
+                  class="field-control"
+                  type="date"
+                  [(ngModel)]="renewalForm.periodStartsAt"
+                  [readonly]="!renewalOverride"
+                  (ngModelChange)="renewalStartChanged()"
+                  required
+                />
+              </label>
+              <label>
+                <span class="field-label">New expiry</span>
+                <input
+                  name="renewalPeriodEnd"
+                  class="field-control"
+                  type="date"
+                  [(ngModel)]="renewalForm.periodEndsAt"
+                  [readonly]="!renewalOverride"
+                  required
+                />
+              </label>
+            </div>
+
+            @if (renewalOverride) {
+              <label>
+                <span class="field-label">Reason for date override *</span>
+                <textarea
+                  name="renewalReason"
+                  class="field-control min-h-20 py-3"
+                  maxlength="500"
+                  [(ngModel)]="renewalForm.reason"
+                  required
+                ></textarea>
+              </label>
+            }
+          </div>
+          <footer class="sheet-footer">
+            <button
+              type="button"
+              class="secondary-button flex-1"
+              [disabled]="saving()"
+              (click)="renewalTarget.set(null)"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="primary-button flex-1"
+              [disabled]="saving() || !validRenewal"
+            >
+              {{ saving() ? 'Renewing' : 'Confirm renewal' }}
+            </button>
+          </footer>
+        </form>
+      }
+    </section>
+  </div>
+}
+
 @if (selected(); as subscription) {
   <div class="sheet-backdrop" (click)="selected.set(null)">
     <section
@@ -441,6 +594,33 @@
                   }
                 </div>
               </section>
+            }
+          </div>
+        </section>
+        <section class="border-t border-champagne-300 pt-4">
+          <div class="mb-3">
+            <h3 class="text-sm font-bold">Renewal history</h3>
+            <p class="mt-1 text-xs text-ink-500">
+              Coverage periods added after the original subscription.
+            </p>
+          </div>
+          <div class="divide-y divide-champagne-200 border-y border-champagne-200">
+            @for (renewal of renewalHistory(); track renewal.id) {
+              <div class="flex items-center justify-between gap-4 py-3 text-sm">
+                <div>
+                  <p class="font-semibold">
+                    {{ date(renewal.periodStartsAt) }} – {{ date(renewal.periodEndsAt) }}
+                  </p>
+                  @if (renewal.reason) {
+                    <p class="mt-1 text-xs text-ink-500">{{ renewal.reason }}</p>
+                  }
+                </div>
+                <p class="shrink-0 font-bold tabular-nums">
+                  {{ renewal.currency }} {{ renewal.amount }}
+                </p>
+              </div>
+            } @empty {
+              <p class="py-3 text-xs text-ink-500">No renewal history yet.</p>
             }
           </div>
         </section>

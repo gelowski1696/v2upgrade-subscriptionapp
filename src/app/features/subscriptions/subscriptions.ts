@@ -1,5 +1,6 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import {
   LucideChevronLeft,
   LucideChevronRight,
@@ -22,6 +23,8 @@ import type {
   ClientRecord,
   PlanRecord,
   SubscriptionRecord,
+  SubscriptionRenewalRecord,
+  SubscriptionRenewalResult,
   SubscriptionStatus,
 } from '../../core/models/api.models';
 import { ToastService } from '../../core/notifications/toast.service';
@@ -49,6 +52,12 @@ type ConfirmedSubscriptionAction = Extract<SubscriptionAction, 'suspend' | 'canc
 interface SubscriptionConfirmation {
   subscription: SubscriptionRecord;
   action: ConfirmedSubscriptionAction;
+}
+
+interface RenewalForm {
+  periodStartsAt: string;
+  periodEndsAt: string;
+  reason: string;
 }
 
 @Component({
@@ -81,6 +90,9 @@ export class SubscriptionsPage implements OnInit {
   readonly editorOpen = signal(false);
   readonly selected = signal<SubscriptionRecord | null>(null);
   readonly actionConfirmation = signal<SubscriptionConfirmation | null>(null);
+  readonly renewalTarget = signal<SubscriptionRecord | null>(null);
+  readonly renewalHistory = signal<SubscriptionRenewalRecord[]>([]);
+  readonly lastRenewal = signal<SubscriptionRenewalRecord | null>(null);
   readonly total = signal(0);
   readonly totalPages = signal(1);
   search = '';
@@ -91,11 +103,14 @@ export class SubscriptionsPage implements OnInit {
   webDashboardDraft = true;
   readonly pageSize = 20;
   form: SubscriptionForm = this.emptyForm();
+  renewalForm: RenewalForm = { periodStartsAt: '', periodEndsAt: '', reason: '' };
+  renewalOverride = false;
 
   constructor(
     private readonly api: ApiService,
     private readonly toasts: ToastService,
     readonly session: SessionStore,
+    private readonly router: Router,
   ) {}
 
   ngOnInit(): void {
@@ -221,7 +236,81 @@ export class SubscriptionsPage implements OnInit {
       this.actionConfirmation.set({ subscription, action });
       return;
     }
+    if (action === 'renew') {
+      this.openRenewal(subscription);
+      return;
+    }
     await this.performAction(subscription, action);
+  }
+
+  openRenewal(subscription: SubscriptionRecord): void {
+    const periodStartsAt = this.defaultRenewalStart(subscription);
+    this.renewalForm = {
+      periodStartsAt,
+      periodEndsAt: this.calculatePeriodEnd(periodStartsAt, subscription.billingInterval),
+      reason: '',
+    };
+    this.renewalOverride = subscription.billingInterval === 'CUSTOM';
+    this.lastRenewal.set(null);
+    this.renewalTarget.set(subscription);
+  }
+
+  renewalStartChanged(): void {
+    const target = this.renewalTarget();
+    if (!target || target.billingInterval === 'CUSTOM') return;
+    this.renewalForm.periodEndsAt = this.calculatePeriodEnd(
+      this.renewalForm.periodStartsAt,
+      target.billingInterval,
+    );
+  }
+
+  async confirmRenewal(): Promise<void> {
+    const subscription = this.renewalTarget();
+    if (!subscription || !this.validRenewal || this.saving()) return;
+    this.saving.set(true);
+    try {
+      const result = await firstValueFrom(
+        this.api.post<SubscriptionRenewalResult>(`/subscriptions/${subscription.id}/renew`, {
+          periodStartsAt: this.renewalOverride
+            ? `${this.renewalForm.periodStartsAt}T00:00:00.000Z`
+            : undefined,
+          periodEndsAt:
+            this.renewalOverride || subscription.billingInterval === 'CUSTOM'
+              ? `${this.renewalForm.periodEndsAt}T00:00:00.000Z`
+              : undefined,
+          reason: this.renewalForm.reason.trim() || undefined,
+        }),
+      );
+      this.lastRenewal.set(result.renewal);
+      this.selected.set(result.subscription);
+      this.subscriptions.update((items) =>
+        items.map((item) => (item.id === result.subscription.id ? result.subscription : item)),
+      );
+      this.renewalHistory.update((items) => [result.renewal, ...items]);
+      this.toasts.show('Subscription renewed', 'success', 'The original start date was preserved.');
+    } catch (error) {
+      this.toasts.show(
+        'Subscription could not be renewed',
+        'error',
+        apiErrorMessage(error, 'Review the renewal period.'),
+      );
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  async recordRenewalPayment(): Promise<void> {
+    const subscription = this.renewalTarget();
+    const renewal = this.lastRenewal();
+    if (!subscription || !renewal) return;
+    await this.router.navigate(['/finance'], {
+      queryParams: {
+        payment: 'renewal',
+        clientId: subscription.clientId,
+        subscriptionId: subscription.id,
+        renewalId: renewal.id,
+      },
+    });
   }
 
   async confirmAction(): Promise<void> {
@@ -309,6 +398,19 @@ export class SubscriptionsPage implements OnInit {
     this.featureModsDraft = featureModsFrom(subscription.entitlements);
     this.webDashboardDraft = webDashboardFrom(subscription.entitlements);
     this.selected.set(subscription);
+    this.renewalHistory.set([]);
+    void this.loadRenewals(subscription.id);
+  }
+
+  private async loadRenewals(subscriptionId: string): Promise<void> {
+    try {
+      const history = await firstValueFrom(
+        this.api.get<SubscriptionRenewalRecord[]>(`/subscriptions/${subscriptionId}/renewals`),
+      );
+      if (this.selected()?.id === subscriptionId) this.renewalHistory.set(history);
+    } catch {
+      this.renewalHistory.set([]);
+    }
   }
 
   async updateWebDashboard(subscription: SubscriptionRecord): Promise<void> {
@@ -440,6 +542,19 @@ export class SubscriptionsPage implements OnInit {
     return this.session.hasAnyRole('SUPER_ADMIN', 'ADMIN');
   }
 
+  get validRenewal(): boolean {
+    const target = this.renewalTarget();
+    if (!target || !this.renewalForm.periodEndsAt) return false;
+    if (
+      new Date(`${this.renewalForm.periodEndsAt}T00:00:00.000Z`) <=
+      new Date(`${this.renewalForm.periodStartsAt}T00:00:00.000Z`)
+    ) {
+      return false;
+    }
+    if (this.renewalOverride && !this.canAdminister) return false;
+    return !this.renewalOverride || this.renewalForm.reason.trim().length > 0;
+  }
+
   private isValidDeviceId(value: string): boolean {
     return /^[A-Za-z0-9][A-Za-z0-9._:-]{7,119}$/.test(value.trim());
   }
@@ -464,5 +579,30 @@ export class SubscriptionsPage implements OnInit {
       expiresAt: '',
       notes: '',
     };
+  }
+
+  private defaultRenewalStart(subscription: SubscriptionRecord): string {
+    const now = new Date();
+    const expiry = subscription.expiresAt ? new Date(subscription.expiresAt) : null;
+    const start = expiry && expiry > now ? expiry : now;
+    return start.toISOString().slice(0, 10);
+  }
+
+  private calculatePeriodEnd(
+    startValue: string,
+    interval: SubscriptionRecord['billingInterval'],
+  ): string {
+    if (!startValue || interval === 'CUSTOM') return '';
+    const date = new Date(`${startValue}T00:00:00.000Z`);
+    const months =
+      interval === 'MONTHLY'
+        ? 1
+        : interval === 'QUARTERLY'
+          ? 3
+          : interval === 'SEMIANNUAL'
+            ? 6
+            : 12;
+    date.setUTCMonth(date.getUTCMonth() + months);
+    return date.toISOString().slice(0, 10);
   }
 }

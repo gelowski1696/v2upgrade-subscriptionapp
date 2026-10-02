@@ -1,5 +1,6 @@
 import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import {
   LucideBan,
   LucideChartColumn,
@@ -16,10 +17,15 @@ import { apiErrorMessage } from '../../core/api/error-message';
 import { SessionStore } from '../../core/auth/session.store';
 import type {
   ApiPage,
+  ClientGroupRecord,
+  ClientRecord,
   ExpenseCategory,
   ExpenseRecord,
   FinanceOverview,
+  PaymentPurpose,
+  PaymentRecord,
   SubscriptionRecord,
+  SubscriptionRenewalRecord,
 } from '../../core/models/api.models';
 import { ToastService } from '../../core/notifications/toast.service';
 import { DialogFocusDirective } from '../../shared/dialog-focus.directive';
@@ -41,7 +47,11 @@ interface ExpenseForm {
 }
 
 interface PaymentForm {
+  clientId: string;
+  purpose: PaymentPurpose;
   subscriptionId: string;
+  renewalId: string;
+  description: string;
   amount: string;
   paidAt: string;
   reference: string;
@@ -49,7 +59,6 @@ interface PaymentForm {
 }
 
 type FinanceTab = 'overview' | 'payments' | 'expenses';
-type PaymentRecord = FinanceOverview['recentPayments'][number];
 type ConfirmationState =
   { kind: 'expense'; expense: ExpenseRecord } | { kind: 'payment'; payment: PaymentRecord };
 
@@ -86,9 +95,19 @@ export class FinancePage implements OnInit {
     { value: 'TAXES', label: 'Taxes' },
     { value: 'OTHER', label: 'Other' },
   ];
+  readonly paymentPurposes: Array<{ value: PaymentPurpose; label: string }> = [
+    { value: 'INITIAL', label: 'Initial payment' },
+    { value: 'RENEWAL', label: 'Renewal' },
+    { value: 'MODIFICATION', label: 'Modification' },
+    { value: 'OTHER', label: 'Other' },
+  ];
   readonly overview = signal<FinanceOverview | null>(null);
   readonly expenses = signal<ExpenseRecord[]>([]);
+  readonly payments = signal<PaymentRecord[]>([]);
   readonly subscriptions = signal<SubscriptionRecord[]>([]);
+  readonly clients = signal<ClientRecord[]>([]);
+  readonly groups = signal<ClientGroupRecord[]>([]);
+  readonly renewals = signal<SubscriptionRenewalRecord[]>([]);
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly error = signal('');
@@ -99,17 +118,25 @@ export class FinancePage implements OnInit {
   readonly chartMaximum = computed(() =>
     Math.max(1, ...this.chart().flatMap((point) => [point.revenue, point.expenses])),
   );
+  readonly paymentSubscriptions = computed(() =>
+    this.subscriptions().filter((item) => item.clientId === this.paymentForm.clientId),
+  );
   currency = 'PHP';
   from = '';
   to = '';
+  groupFilter = '';
+  purposeFilter: PaymentPurpose | '' = '';
   expenseForm = this.emptyExpense();
   paymentForm = this.emptyPayment();
   voidReason = '';
+  private handledPaymentLink = false;
 
   constructor(
     private readonly api: ApiService,
     private readonly toasts: ToastService,
     readonly session: SessionStore,
+    private readonly route: ActivatedRoute,
+    private readonly router: Router,
   ) {
     this.setPreset(30, false);
   }
@@ -122,12 +149,25 @@ export class FinancePage implements OnInit {
     this.loading.set(true);
     this.error.set('');
     try {
-      const params = { from: this.from, to: this.to, currency: this.currency };
+      const params = {
+        from: this.from,
+        to: this.to,
+        currency: this.currency,
+      };
       const result = await firstValueFrom(
         forkJoin({
           overview: this.api.get<FinanceOverview>('/finance/overview', params),
           expenses: this.api.get<ApiPage<ExpenseRecord>>('/finance/expenses', {
+            from: this.from,
+            to: this.to,
+            currency: this.currency,
+            page: 1,
+            pageSize: 100,
+          }),
+          payments: this.api.get<ApiPage<PaymentRecord>>('/finance/payments', {
             ...params,
+            groupId: this.groupFilter || undefined,
+            purpose: this.purposeFilter || undefined,
             page: 1,
             pageSize: 100,
           }),
@@ -135,11 +175,23 @@ export class FinancePage implements OnInit {
             page: 1,
             pageSize: 100,
           }),
+          clients: this.api.get<ApiPage<ClientRecord>>('/clients', {
+            page: 1,
+            pageSize: 100,
+          }),
+          groups: this.api.get<ApiPage<ClientGroupRecord>>('/client-groups', {
+            page: 1,
+            pageSize: 100,
+          }),
         }),
       );
       this.overview.set(result.overview);
       this.expenses.set(result.expenses.items);
+      this.payments.set(result.payments.items);
       this.subscriptions.set(result.subscriptions.items);
+      this.clients.set(result.clients.items);
+      this.groups.set(result.groups.items);
+      await this.openLinkedPayment();
     } catch (error) {
       this.error.set(apiErrorMessage(error, 'Finance data could not be loaded.'));
     } finally {
@@ -169,11 +221,40 @@ export class FinancePage implements OnInit {
     this.paymentOpen.set(true);
   }
 
-  paymentSubscriptionChanged(): void {
+  paymentClientChanged(): void {
+    this.paymentForm.subscriptionId = '';
+    this.paymentForm.renewalId = '';
+    this.paymentForm.amount = '';
+    this.renewals.set([]);
+  }
+
+  paymentPurposeChanged(): void {
+    if (this.paymentForm.purpose !== 'RENEWAL') this.paymentForm.renewalId = '';
+  }
+
+  async paymentSubscriptionChanged(): Promise<void> {
     const subscription = this.subscriptions().find(
       (item) => item.id === this.paymentForm.subscriptionId,
     );
-    if (subscription) this.paymentForm.amount = subscription.amount;
+    this.paymentForm.renewalId = '';
+    this.renewals.set([]);
+    if (subscription) {
+      this.paymentForm.clientId = subscription.clientId;
+      this.paymentForm.amount = subscription.amount;
+      if (this.paymentForm.purpose === 'RENEWAL') {
+        try {
+          this.renewals.set(
+            await firstValueFrom(
+              this.api.get<SubscriptionRenewalRecord[]>(
+                `/subscriptions/${subscription.id}/renewals`,
+              ),
+            ),
+          );
+        } catch {
+          this.renewals.set([]);
+        }
+      }
+    }
   }
 
   async saveExpense(): Promise<void> {
@@ -212,6 +293,9 @@ export class FinancePage implements OnInit {
       await firstValueFrom(
         this.api.post('/finance/payments', {
           ...this.paymentForm,
+          subscriptionId: this.paymentForm.subscriptionId || undefined,
+          renewalId: this.paymentForm.renewalId || undefined,
+          description: this.paymentForm.description.trim() || undefined,
           paidAt: `${this.paymentForm.paidAt}T00:00:00.000Z`,
           currency: this.currency,
           reference: this.paymentForm.reference.trim() || undefined,
@@ -219,7 +303,7 @@ export class FinancePage implements OnInit {
         }),
       );
       this.paymentOpen.set(false);
-      this.toasts.show('Subscription payment recorded', 'success');
+      this.toasts.show('Payment recorded', 'success');
       await this.load();
     } catch (error) {
       this.toasts.show(
@@ -299,6 +383,10 @@ export class FinancePage implements OnInit {
     return this.categories.find((category) => category.value === value)?.label ?? value;
   }
 
+  paymentPurposeLabel(value: PaymentPurpose): string {
+    return this.paymentPurposes.find((purpose) => purpose.value === value)?.label ?? value;
+  }
+
   barHeight(value: number): string {
     if (!value) return '0%';
     return `${Math.max(3, (value / this.chartMaximum()) * 100)}%`;
@@ -342,9 +430,12 @@ export class FinancePage implements OnInit {
 
   get validPayment(): boolean {
     return (
-      Boolean(this.paymentForm.subscriptionId) &&
+      Boolean(this.paymentForm.clientId) &&
       Number(this.paymentForm.amount) > 0 &&
-      Boolean(this.paymentForm.paidAt)
+      Boolean(this.paymentForm.paidAt) &&
+      (this.paymentForm.purpose !== 'RENEWAL' || Boolean(this.paymentForm.subscriptionId)) &&
+      (!['MODIFICATION', 'OTHER'].includes(this.paymentForm.purpose) ||
+        this.paymentForm.description.trim().length > 0)
     );
   }
 
@@ -381,11 +472,38 @@ export class FinancePage implements OnInit {
 
   private emptyPayment(): PaymentForm {
     return {
+      clientId: '',
+      purpose: 'INITIAL',
       subscriptionId: '',
+      renewalId: '',
+      description: '',
       amount: '',
       paidAt: new Date().toISOString().slice(0, 10),
       reference: '',
       notes: '',
     };
+  }
+
+  private async openLinkedPayment(): Promise<void> {
+    if (this.handledPaymentLink) return;
+    const params = this.route.snapshot.queryParamMap;
+    if (params.get('payment') !== 'renewal') return;
+    this.handledPaymentLink = true;
+    this.activeTab.set('payments');
+    this.paymentForm = {
+      ...this.emptyPayment(),
+      clientId: params.get('clientId') ?? '',
+      subscriptionId: params.get('subscriptionId') ?? '',
+      renewalId: params.get('renewalId') ?? '',
+      purpose: 'RENEWAL',
+    };
+    await this.paymentSubscriptionChanged();
+    this.paymentForm.renewalId = params.get('renewalId') ?? '';
+    this.paymentOpen.set(true);
+    await this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {},
+      replaceUrl: true,
+    });
   }
 }
