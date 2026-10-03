@@ -367,6 +367,80 @@
     @apply block h-full w-1/3 bg-gold-500;
     animation: loading-slide 1s ease-in-out infinite;
   }
+
+  .payment-target-toggle {
+    @apply grid grid-cols-2 rounded-md border border-champagne-300 bg-champagne-100 p-1;
+  }
+
+  .payment-target-toggle button {
+    @apply min-h-10 rounded px-3 text-sm font-semibold text-ink-600 transition;
+  }
+
+  .payment-target-toggle button.is-active {
+    @apply bg-white text-ink-950 shadow-sm;
+  }
+
+  .group-payment-editor {
+    @apply overflow-hidden rounded-md border border-champagne-300;
+  }
+
+  .group-payment-summary {
+    @apply flex items-center justify-between gap-4 border-b border-champagne-300 bg-champagne-100/70 px-4 py-3;
+  }
+
+  .group-select-all {
+    @apply flex shrink-0 items-center gap-2 text-xs font-semibold text-ink-800;
+  }
+
+  .group-select-all input,
+  .group-client-check {
+    @apply size-4 accent-gold-500;
+  }
+
+  .group-amount-tool {
+    @apply flex items-end gap-3 border-b border-champagne-300 px-4 py-3;
+  }
+
+  .group-allocation-list {
+    @apply max-h-72 overflow-y-auto;
+  }
+
+  .group-allocation-row {
+    @apply grid items-center gap-3 border-b border-champagne-200 px-4 py-3 last:border-b-0;
+    grid-template-columns: 1rem minmax(9rem, 1fr) minmax(12rem, 1fr) 9rem;
+  }
+
+  .group-allocation-row.is-muted {
+    @apply bg-champagne-100/50 opacity-60;
+  }
+
+  .payment-date-wide {
+    @apply sm:col-span-2;
+  }
+}
+
+@media (max-width: 639px) {
+  .group-payment-summary,
+  .group-amount-tool {
+    @apply items-start;
+  }
+
+  .group-payment-summary,
+  .group-amount-tool {
+    @apply flex-col;
+  }
+
+  .group-amount-tool .secondary-button {
+    @apply w-full;
+  }
+
+  .group-allocation-row {
+    grid-template-columns: 1rem minmax(0, 1fr);
+  }
+
+  .group-allocation-row > label {
+    grid-column: 2;
+  }
 }
 
 @media (min-width: 640px) {

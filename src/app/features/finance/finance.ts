@@ -47,7 +47,9 @@ interface ExpenseForm {
 }
 
 interface PaymentForm {
+  target: 'CLIENT' | 'GROUP';
   clientId: string;
+  groupId: string;
   purpose: PaymentPurpose;
   subscriptionId: string;
   renewalId: string;
@@ -56,6 +58,16 @@ interface PaymentForm {
   paidAt: string;
   reference: string;
   notes: string;
+}
+
+interface GroupPaymentAllocation {
+  clientId: string;
+  businessName: string;
+  code: string;
+  selected: boolean;
+  subscriptionId: string;
+  renewalId: string;
+  amount: string;
 }
 
 type FinanceTab = 'overview' | 'payments' | 'expenses';
@@ -113,6 +125,8 @@ export class FinancePage implements OnInit {
   readonly error = signal('');
   readonly expenseOpen = signal(false);
   readonly paymentOpen = signal(false);
+  readonly groupClientsLoading = signal(false);
+  readonly groupAllocations = signal<GroupPaymentAllocation[]>([]);
   readonly confirmation = signal<ConfirmationState | null>(null);
   readonly chart = computed(() => this.chartPoints(this.overview()?.daily ?? []));
   readonly chartMaximum = computed(() =>
@@ -128,6 +142,7 @@ export class FinancePage implements OnInit {
   purposeFilter: PaymentPurpose | '' = '';
   expenseForm = this.emptyExpense();
   paymentForm = this.emptyPayment();
+  groupDefaultAmount = '';
   voidReason = '';
   private handledPaymentLink = false;
 
@@ -188,7 +203,17 @@ export class FinancePage implements OnInit {
       this.overview.set(result.overview);
       this.expenses.set(result.expenses.items);
       this.payments.set(result.payments.items);
-      this.subscriptions.set(result.subscriptions.items);
+      const subscriptions = [...result.subscriptions.items];
+      for (let page = 2; page <= result.subscriptions.totalPages; page += 1) {
+        const nextPage = await firstValueFrom(
+          this.api.get<ApiPage<SubscriptionRecord>>('/subscriptions', {
+            page,
+            pageSize: 100,
+          }),
+        );
+        subscriptions.push(...nextPage.items);
+      }
+      this.subscriptions.set(subscriptions);
       this.clients.set(result.clients.items);
       this.groups.set(result.groups.items);
       await this.openLinkedPayment();
@@ -218,7 +243,21 @@ export class FinancePage implements OnInit {
   openPayment(): void {
     this.activeTab.set('payments');
     this.paymentForm = this.emptyPayment();
+    this.groupAllocations.set([]);
+    this.groupDefaultAmount = '';
     this.paymentOpen.set(true);
+  }
+
+  paymentTargetChanged(target: 'CLIENT' | 'GROUP'): void {
+    this.paymentForm.target = target;
+    this.paymentForm.clientId = '';
+    this.paymentForm.groupId = '';
+    this.paymentForm.subscriptionId = '';
+    this.paymentForm.renewalId = '';
+    this.paymentForm.amount = '';
+    this.groupDefaultAmount = '';
+    this.groupAllocations.set([]);
+    this.renewals.set([]);
   }
 
   paymentClientChanged(): void {
@@ -230,6 +269,103 @@ export class FinancePage implements OnInit {
 
   paymentPurposeChanged(): void {
     if (this.paymentForm.purpose !== 'RENEWAL') this.paymentForm.renewalId = '';
+    if (this.paymentForm.target === 'GROUP') {
+      this.groupAllocations.update((allocations) =>
+        allocations.map((allocation) => {
+          const subscription = this.preferredSubscription(allocation.clientId);
+          return {
+            ...allocation,
+            subscriptionId:
+              this.paymentForm.purpose === 'RENEWAL'
+                ? (subscription?.id ?? '')
+                : allocation.subscriptionId,
+            amount:
+              this.paymentForm.purpose === 'RENEWAL' && subscription
+                ? subscription.amount
+                : allocation.amount,
+          };
+        }),
+      );
+    }
+  }
+
+  async paymentGroupChanged(): Promise<void> {
+    const groupId = this.paymentForm.groupId;
+    this.groupAllocations.set([]);
+    this.groupDefaultAmount = '';
+    if (!groupId) return;
+
+    this.groupClientsLoading.set(true);
+    try {
+      const firstPage = await firstValueFrom(
+        this.api.get<ApiPage<ClientRecord>>('/clients', {
+          groupId,
+          status: 'ACTIVE',
+          page: 1,
+          pageSize: 100,
+        }),
+      );
+      const clients = [...firstPage.items];
+      for (let page = 2; page <= firstPage.totalPages; page += 1) {
+        const nextPage = await firstValueFrom(
+          this.api.get<ApiPage<ClientRecord>>('/clients', {
+            groupId,
+            status: 'ACTIVE',
+            page,
+            pageSize: 100,
+          }),
+        );
+        clients.push(...nextPage.items);
+      }
+      if (this.paymentForm.groupId !== groupId) return;
+      this.groupAllocations.set(
+        clients.map((client) => {
+          const subscription = this.preferredSubscription(client.id);
+          return {
+            clientId: client.id,
+            businessName: client.businessName,
+            code: client.code,
+            selected: true,
+            subscriptionId: this.paymentForm.purpose === 'RENEWAL' ? (subscription?.id ?? '') : '',
+            renewalId: '',
+            amount: this.paymentForm.purpose === 'RENEWAL' ? (subscription?.amount ?? '') : '',
+          };
+        }),
+      );
+    } catch (error) {
+      this.toasts.show(
+        'Group clients could not be loaded',
+        'error',
+        apiErrorMessage(error, 'Try selecting the group again.'),
+      );
+    } finally {
+      this.groupClientsLoading.set(false);
+    }
+  }
+
+  groupSubscriptions(clientId: string): SubscriptionRecord[] {
+    return this.subscriptions().filter((subscription) => subscription.clientId === clientId);
+  }
+
+  groupSubscriptionChanged(allocation: GroupPaymentAllocation): void {
+    const subscription = this.subscriptions().find((item) => item.id === allocation.subscriptionId);
+    allocation.renewalId = '';
+    if (subscription && !allocation.amount) allocation.amount = subscription.amount;
+  }
+
+  toggleAllGroupClients(selected: boolean): void {
+    this.groupAllocations.update((allocations) =>
+      allocations.map((allocation) => ({ ...allocation, selected })),
+    );
+  }
+
+  applyGroupDefaultAmount(): void {
+    if (Number(this.groupDefaultAmount) <= 0) return;
+    this.groupAllocations.update((allocations) =>
+      allocations.map((allocation) =>
+        allocation.selected ? { ...allocation, amount: this.groupDefaultAmount } : allocation,
+      ),
+    );
   }
 
   async paymentSubscriptionChanged(): Promise<void> {
@@ -290,20 +426,44 @@ export class FinancePage implements OnInit {
     if (!this.validPayment || this.saving()) return;
     this.saving.set(true);
     try {
-      await firstValueFrom(
-        this.api.post('/finance/payments', {
-          ...this.paymentForm,
-          subscriptionId: this.paymentForm.subscriptionId || undefined,
-          renewalId: this.paymentForm.renewalId || undefined,
-          description: this.paymentForm.description.trim() || undefined,
-          paidAt: `${this.paymentForm.paidAt}T00:00:00.000Z`,
-          currency: this.currency,
-          reference: this.paymentForm.reference.trim() || undefined,
-          notes: this.paymentForm.notes.trim() || undefined,
-        }),
-      );
+      if (this.paymentForm.target === 'GROUP') {
+        const allocations = this.selectedGroupAllocations.map((allocation) => ({
+          clientId: allocation.clientId,
+          subscriptionId: allocation.subscriptionId || undefined,
+          renewalId: allocation.renewalId || undefined,
+          amount: allocation.amount,
+        }));
+        await firstValueFrom(
+          this.api.post('/finance/payments/group', {
+            groupId: this.paymentForm.groupId,
+            purpose: this.paymentForm.purpose,
+            allocations,
+            description: this.paymentForm.description.trim() || undefined,
+            paidAt: `${this.paymentForm.paidAt}T00:00:00.000Z`,
+            currency: this.currency,
+            reference: this.paymentForm.reference.trim() || undefined,
+            notes: this.paymentForm.notes.trim() || undefined,
+          }),
+        );
+        this.toasts.show(`Group payment recorded for ${allocations.length} clients`, 'success');
+      } else {
+        await firstValueFrom(
+          this.api.post('/finance/payments', {
+            clientId: this.paymentForm.clientId,
+            purpose: this.paymentForm.purpose,
+            subscriptionId: this.paymentForm.subscriptionId || undefined,
+            renewalId: this.paymentForm.renewalId || undefined,
+            description: this.paymentForm.description.trim() || undefined,
+            amount: this.paymentForm.amount,
+            paidAt: `${this.paymentForm.paidAt}T00:00:00.000Z`,
+            currency: this.currency,
+            reference: this.paymentForm.reference.trim() || undefined,
+            notes: this.paymentForm.notes.trim() || undefined,
+          }),
+        );
+        this.toasts.show('Payment recorded', 'success');
+      }
       this.paymentOpen.set(false);
-      this.toasts.show('Payment recorded', 'success');
       await this.load();
     } catch (error) {
       this.toasts.show(
@@ -429,13 +589,41 @@ export class FinancePage implements OnInit {
   }
 
   get validPayment(): boolean {
+    const validTarget =
+      this.paymentForm.target === 'GROUP'
+        ? Boolean(this.paymentForm.groupId) &&
+          this.selectedGroupAllocations.length > 0 &&
+          this.selectedGroupAllocations.every(
+            (allocation) =>
+              Number(allocation.amount) > 0 &&
+              (this.paymentForm.purpose !== 'RENEWAL' || Boolean(allocation.subscriptionId)),
+          )
+        : Boolean(this.paymentForm.clientId) &&
+          Number(this.paymentForm.amount) > 0 &&
+          (this.paymentForm.purpose !== 'RENEWAL' || Boolean(this.paymentForm.subscriptionId));
     return (
-      Boolean(this.paymentForm.clientId) &&
-      Number(this.paymentForm.amount) > 0 &&
+      validTarget &&
       Boolean(this.paymentForm.paidAt) &&
-      (this.paymentForm.purpose !== 'RENEWAL' || Boolean(this.paymentForm.subscriptionId)) &&
       (!['MODIFICATION', 'OTHER'].includes(this.paymentForm.purpose) ||
         this.paymentForm.description.trim().length > 0)
+    );
+  }
+
+  get selectedGroupAllocations(): GroupPaymentAllocation[] {
+    return this.groupAllocations().filter((allocation) => allocation.selected);
+  }
+
+  get groupPaymentTotal(): number {
+    return this.selectedGroupAllocations.reduce(
+      (total, allocation) => total + (Number(allocation.amount) || 0),
+      0,
+    );
+  }
+
+  get allGroupClientsSelected(): boolean {
+    return (
+      this.groupAllocations().length > 0 &&
+      this.groupAllocations().every((allocation) => allocation.selected)
     );
   }
 
@@ -472,7 +660,9 @@ export class FinancePage implements OnInit {
 
   private emptyPayment(): PaymentForm {
     return {
+      target: 'CLIENT',
       clientId: '',
+      groupId: '',
       purpose: 'INITIAL',
       subscriptionId: '',
       renewalId: '',
@@ -482,6 +672,21 @@ export class FinancePage implements OnInit {
       reference: '',
       notes: '',
     };
+  }
+
+  private preferredSubscription(clientId: string): SubscriptionRecord | undefined {
+    const priority: Record<SubscriptionRecord['status'], number> = {
+      ACTIVE: 0,
+      GRACE: 1,
+      TRIAL: 2,
+      DRAFT: 3,
+      SUSPENDED: 4,
+      EXPIRED: 5,
+      CANCELLED: 6,
+    };
+    return this.groupSubscriptions(clientId)
+      .filter((subscription) => subscription.currency === this.currency)
+      .sort((left, right) => priority[left.status] - priority[right.status])[0];
   }
 
   private async openLinkedPayment(): Promise<void> {

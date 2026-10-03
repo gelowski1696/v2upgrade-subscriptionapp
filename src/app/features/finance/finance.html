@@ -257,6 +257,9 @@
                     @if (payment.status === 'VOIDED') {
                       <span class="status-chip bg-champagne-200 text-ink-600">Voided</span>
                     }
+                    @if (payment.batchId) {
+                      <span class="status-chip bg-gold-200 text-gold-700">Group allocation</span>
+                    }
                   </div>
                   <p class="mt-1 truncate text-xs text-ink-600">
                     {{ paymentPurposeLabel(payment.purpose) }} ·
@@ -613,6 +616,7 @@
     <section
       appDialogFocus
       class="sheet-panel"
+      [class.sheet-panel-wide]="paymentForm.target === 'GROUP'"
       role="dialog"
       aria-modal="true"
       aria-labelledby="payment-title"
@@ -635,22 +639,64 @@
       </header>
       <form (ngSubmit)="savePayment()">
         <div class="sheet-body">
-          <label>
-            <span class="field-label">Client *</span>
-            <select
-              data-dialog-initial-focus
-              name="paymentClient"
-              class="field-control"
-              [(ngModel)]="paymentForm.clientId"
-              (ngModelChange)="paymentClientChanged()"
-              required
-            >
-              <option value="" disabled>Select client</option>
-              @for (client of clients(); track client.id) {
-                <option [value]="client.id">{{ client.businessName }} ({{ client.code }})</option>
-              }
-            </select>
-          </label>
+          <fieldset>
+            <legend class="field-label">Payment for *</legend>
+            <div class="payment-target-toggle">
+              <button
+                type="button"
+                data-dialog-initial-focus
+                [class.is-active]="paymentForm.target === 'CLIENT'"
+                [attr.aria-pressed]="paymentForm.target === 'CLIENT'"
+                (click)="paymentTargetChanged('CLIENT')"
+              >
+                One client
+              </button>
+              <button
+                type="button"
+                [class.is-active]="paymentForm.target === 'GROUP'"
+                [attr.aria-pressed]="paymentForm.target === 'GROUP'"
+                (click)="paymentTargetChanged('GROUP')"
+              >
+                Client group
+              </button>
+            </div>
+          </fieldset>
+
+          @if (paymentForm.target === 'CLIENT') {
+            <label>
+              <span class="field-label">Client *</span>
+              <select
+                name="paymentClient"
+                class="field-control"
+                [(ngModel)]="paymentForm.clientId"
+                (ngModelChange)="paymentClientChanged()"
+                required
+              >
+                <option value="" disabled>Select client</option>
+                @for (client of clients(); track client.id) {
+                  <option [value]="client.id">{{ client.businessName }} ({{ client.code }})</option>
+                }
+              </select>
+            </label>
+          } @else {
+            <label>
+              <span class="field-label">Client group *</span>
+              <select
+                name="paymentGroup"
+                class="field-control"
+                [(ngModel)]="paymentForm.groupId"
+                (ngModelChange)="paymentGroupChanged()"
+                required
+              >
+                <option value="" disabled>Select group</option>
+                @for (group of groups(); track group.id) {
+                  @if (group.status === 'ACTIVE') {
+                    <option [value]="group.id">{{ group.name }} ({{ group.clientCount }})</option>
+                  }
+                }
+              </select>
+            </label>
+          }
           <label>
             <span class="field-label">Purpose *</span>
             <select
@@ -665,41 +711,43 @@
               }
             </select>
           </label>
-          <label
-            ><span class="field-label"
-              >Subscription {{ paymentForm.purpose === 'RENEWAL' ? '*' : '(optional)' }}</span
-            ><select
-              name="paymentSubscription"
-              class="field-control"
-              [(ngModel)]="paymentForm.subscriptionId"
-              (ngModelChange)="paymentSubscriptionChanged()"
-              [required]="paymentForm.purpose === 'RENEWAL'"
-            >
-              <option value="">No subscription</option>
-              @for (subscription of paymentSubscriptions(); track subscription.id) {
-                <option [value]="subscription.id">
-                  {{ subscription.planVersion.plan.name }} · ends
-                  {{ date(subscription.expiresAt || subscription.startsAt) }}
-                </option>
-              }
-            </select></label
-          >
-          @if (paymentForm.purpose === 'RENEWAL' && renewals().length) {
-            <label>
-              <span class="field-label">Renewal period (optional)</span>
-              <select
-                name="paymentRenewal"
+          @if (paymentForm.target === 'CLIENT') {
+            <label
+              ><span class="field-label"
+                >Subscription {{ paymentForm.purpose === 'RENEWAL' ? '*' : '(optional)' }}</span
+              ><select
+                name="paymentSubscription"
                 class="field-control"
-                [(ngModel)]="paymentForm.renewalId"
+                [(ngModel)]="paymentForm.subscriptionId"
+                (ngModelChange)="paymentSubscriptionChanged()"
+                [required]="paymentForm.purpose === 'RENEWAL'"
               >
-                <option value="">No specific renewal</option>
-                @for (renewal of renewals(); track renewal.id) {
-                  <option [value]="renewal.id">
-                    {{ date(renewal.periodStartsAt) }} – {{ date(renewal.periodEndsAt) }}
+                <option value="">No subscription</option>
+                @for (subscription of paymentSubscriptions(); track subscription.id) {
+                  <option [value]="subscription.id">
+                    {{ subscription.planVersion.plan.name }} · ends
+                    {{ date(subscription.expiresAt || subscription.startsAt) }}
                   </option>
                 }
-              </select>
-            </label>
+              </select></label
+            >
+            @if (paymentForm.purpose === 'RENEWAL' && renewals().length) {
+              <label>
+                <span class="field-label">Renewal period (optional)</span>
+                <select
+                  name="paymentRenewal"
+                  class="field-control"
+                  [(ngModel)]="paymentForm.renewalId"
+                >
+                  <option value="">No specific renewal</option>
+                  @for (renewal of renewals(); track renewal.id) {
+                    <option [value]="renewal.id">
+                      {{ date(renewal.periodStartsAt) }} – {{ date(renewal.periodEndsAt) }}
+                    </option>
+                  }
+                </select>
+              </label>
+            }
           }
           @if (paymentForm.purpose === 'MODIFICATION' || paymentForm.purpose === 'OTHER') {
             <label>
@@ -714,20 +762,134 @@
               />
             </label>
           }
+          @if (paymentForm.target === 'GROUP') {
+            @if (groupClientsLoading()) {
+              <div class="loading-line"></div>
+            } @else if (paymentForm.groupId && groupAllocations().length) {
+              <section class="group-payment-editor" aria-labelledby="group-allocation-heading">
+                <header class="group-payment-summary">
+                  <div>
+                    <h3 id="group-allocation-heading" class="text-sm font-bold">
+                      Client allocations
+                    </h3>
+                    <p class="mt-1 text-xs text-ink-500">
+                      {{ selectedGroupAllocations.length }} of
+                      {{ groupAllocations().length }} clients · {{ money(groupPaymentTotal) }} total
+                    </p>
+                  </div>
+                  <label class="group-select-all">
+                    <input
+                      type="checkbox"
+                      [checked]="allGroupClientsSelected"
+                      (change)="toggleAllGroupClients($any($event.target).checked)"
+                    />
+                    Select all
+                  </label>
+                </header>
+                <div class="group-amount-tool">
+                  <label class="min-w-0 flex-1">
+                    <span class="field-label">Set amount for selected clients</span>
+                    <input
+                      name="groupDefaultAmount"
+                      class="field-control"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      inputmode="decimal"
+                      [(ngModel)]="groupDefaultAmount"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    class="secondary-button shrink-0"
+                    [disabled]="!groupDefaultAmount || !selectedGroupAllocations.length"
+                    (click)="applyGroupDefaultAmount()"
+                  >
+                    Apply
+                  </button>
+                </div>
+                <div class="group-allocation-list">
+                  @for (allocation of groupAllocations(); track allocation.clientId) {
+                    <div class="group-allocation-row" [class.is-muted]="!allocation.selected">
+                      <input
+                        type="checkbox"
+                        class="group-client-check"
+                        [attr.aria-label]="'Include ' + allocation.businessName"
+                        [(ngModel)]="allocation.selected"
+                        [name]="'selected-' + allocation.clientId"
+                      />
+                      <div class="min-w-0">
+                        <p class="truncate text-sm font-semibold">{{ allocation.businessName }}</p>
+                        <p class="truncate text-xs text-ink-500">{{ allocation.code }}</p>
+                      </div>
+                      <label class="min-w-0">
+                        <span class="sr-only">Subscription for {{ allocation.businessName }}</span>
+                        <select
+                          class="field-control"
+                          [(ngModel)]="allocation.subscriptionId"
+                          [name]="'subscription-' + allocation.clientId"
+                          [disabled]="!allocation.selected"
+                          [required]="allocation.selected && paymentForm.purpose === 'RENEWAL'"
+                          (ngModelChange)="groupSubscriptionChanged(allocation)"
+                        >
+                          <option value="">
+                            {{
+                              paymentForm.purpose === 'RENEWAL'
+                                ? 'Select subscription'
+                                : 'No subscription'
+                            }}
+                          </option>
+                          @for (
+                            subscription of groupSubscriptions(allocation.clientId);
+                            track subscription.id
+                          ) {
+                            <option [value]="subscription.id">
+                              {{ subscription.planVersion.plan.name }} · {{ subscription.status }}
+                            </option>
+                          }
+                        </select>
+                      </label>
+                      <label>
+                        <span class="sr-only">Amount for {{ allocation.businessName }}</span>
+                        <input
+                          class="field-control text-right tabular-nums"
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          inputmode="decimal"
+                          placeholder="Amount"
+                          [(ngModel)]="allocation.amount"
+                          [name]="'amount-' + allocation.clientId"
+                          [disabled]="!allocation.selected"
+                          [required]="allocation.selected"
+                        />
+                      </label>
+                    </div>
+                  }
+                </div>
+              </section>
+            } @else if (paymentForm.groupId) {
+              <p class="rounded-md bg-champagne-100 px-4 py-3 text-sm text-ink-600">
+                This group has no active clients.
+              </p>
+            }
+          }
           <div class="grid gap-4 sm:grid-cols-2">
-            <label
-              ><span class="field-label">Amount *</span
-              ><input
-                name="paymentAmount"
-                class="field-control"
-                type="number"
-                min="0.01"
-                step="0.01"
-                inputmode="decimal"
-                [(ngModel)]="paymentForm.amount"
-                required
-            /></label>
-            <label
+            @if (paymentForm.target === 'CLIENT') {
+              <label
+                ><span class="field-label">Amount *</span
+                ><input
+                  name="paymentAmount"
+                  class="field-control"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  inputmode="decimal"
+                  [(ngModel)]="paymentForm.amount"
+                  required
+              /></label>
+            }
+            <label [class.payment-date-wide]="paymentForm.target === 'GROUP'"
               ><span class="field-label">Payment date *</span
               ><input
                 name="paymentDate"
@@ -769,7 +931,13 @@
             class="primary-button flex-1"
             [disabled]="saving() || !validPayment"
           >
-            {{ saving() ? 'Saving' : 'Record payment' }}
+            {{
+              saving()
+                ? 'Saving'
+                : paymentForm.target === 'GROUP'
+                  ? 'Record group payment'
+                  : 'Record payment'
+            }}
           </button>
         </footer>
       </form>

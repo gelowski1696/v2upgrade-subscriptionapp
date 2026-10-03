@@ -161,6 +161,7 @@ export type PaymentPurpose = 'INITIAL' | 'RENEWAL' | 'MODIFICATION' | 'OTHER';
 
 export interface PaymentRecord {
   id: string;
+  batchId: string | null;
   subscriptionId: string | null;
   renewalId: string | null;
   purpose: PaymentPurpose;
