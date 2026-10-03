@@ -6,6 +6,7 @@ import {
   LucideChartColumn,
   LucideCircleAlert,
   LucideCircleDollarSign,
+  LucideEye,
   LucidePlus,
   LucideReceiptText,
   LucideTrash2,
@@ -82,6 +83,7 @@ type ConfirmationState =
     LucideChartColumn,
     LucideCircleAlert,
     LucideCircleDollarSign,
+    LucideEye,
     LucidePlus,
     LucideReceiptText,
     LucideTrash2,
@@ -125,6 +127,8 @@ export class FinancePage implements OnInit {
   readonly error = signal('');
   readonly expenseOpen = signal(false);
   readonly paymentOpen = signal(false);
+  readonly selectedExpense = signal<ExpenseRecord | null>(null);
+  readonly selectedPayment = signal<PaymentRecord | null>(null);
   readonly groupClientsLoading = signal(false);
   readonly groupAllocations = signal<GroupPaymentAllocation[]>([]);
   readonly confirmation = signal<ConfirmationState | null>(null);
@@ -246,6 +250,21 @@ export class FinancePage implements OnInit {
     this.groupAllocations.set([]);
     this.groupDefaultAmount = '';
     this.paymentOpen.set(true);
+  }
+
+  viewExpense(expense: ExpenseRecord): void {
+    this.selectedPayment.set(null);
+    this.selectedExpense.set(expense);
+  }
+
+  viewPayment(payment: PaymentRecord): void {
+    this.selectedExpense.set(null);
+    this.selectedPayment.set(payment);
+  }
+
+  closeRecordDetails(): void {
+    this.selectedExpense.set(null);
+    this.selectedPayment.set(null);
   }
 
   paymentTargetChanged(target: 'CLIENT' | 'GROUP'): void {

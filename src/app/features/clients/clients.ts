@@ -5,6 +5,7 @@ import {
   LucideBuilding2,
   LucideChevronLeft,
   LucideChevronRight,
+  LucideEye,
   LucidePencil,
   LucidePlus,
   LucideSearch,
@@ -51,6 +52,7 @@ interface ClientGroupForm {
     LucideBuilding2,
     LucideChevronLeft,
     LucideChevronRight,
+    LucideEye,
     LucidePencil,
     LucidePlus,
     LucideSearch,
@@ -68,6 +70,10 @@ export class ClientsPage implements OnInit, OnDestroy {
   readonly editorOpen = signal(false);
   readonly archiveConfirmationOpen = signal(false);
   readonly groupManagerOpen = signal(false);
+  readonly selectedGroup = signal<ClientGroupRecord | null>(null);
+  readonly groupMembers = signal<ClientRecord[]>([]);
+  readonly groupMembersLoading = signal(false);
+  readonly groupMembersError = signal('');
   readonly selectedClientIds = signal<Set<string>>(new Set());
   readonly total = signal(0);
   readonly groupTotal = signal(0);
@@ -314,6 +320,48 @@ export class ClientsPage implements OnInit, OnDestroy {
     this.groupManagerOpen.set(true);
   }
 
+  async openGroupDetails(group: ClientGroupRecord): Promise<void> {
+    this.selectedGroup.set(group);
+    this.groupMembers.set([]);
+    this.groupMembersError.set('');
+    this.groupMembersLoading.set(true);
+
+    try {
+      const firstPage = await firstValueFrom(
+        this.api.get<ApiPage<ClientRecord>>('/clients', {
+          groupId: group.id,
+          page: 1,
+          pageSize: 100,
+        }),
+      );
+      const members = [...firstPage.items];
+      for (let page = 2; page <= firstPage.totalPages; page += 1) {
+        const nextPage = await firstValueFrom(
+          this.api.get<ApiPage<ClientRecord>>('/clients', {
+            groupId: group.id,
+            page,
+            pageSize: 100,
+          }),
+        );
+        members.push(...nextPage.items);
+      }
+      if (this.selectedGroup()?.id === group.id) this.groupMembers.set(members);
+    } catch (error) {
+      if (this.selectedGroup()?.id === group.id) {
+        this.groupMembersError.set(apiErrorMessage(error, 'Group members could not be loaded.'));
+      }
+    } finally {
+      if (this.selectedGroup()?.id === group.id) this.groupMembersLoading.set(false);
+    }
+  }
+
+  closeGroupDetails(): void {
+    this.selectedGroup.set(null);
+    this.groupMembers.set([]);
+    this.groupMembersError.set('');
+    this.groupMembersLoading.set(false);
+  }
+
   resetGroupForm(): void {
     this.groupEditing = null;
     this.groupForm = this.emptyGroupForm();
@@ -376,11 +424,16 @@ export class ClientsPage implements OnInit, OnDestroy {
   }
 
   showGroupClients(group: ClientGroupRecord): void {
+    this.closeGroupDetails();
     this.view = 'clients';
     this.groupId = group.id;
     this.page = 1;
     void this.updateWorkspaceUrl();
     void this.load();
+  }
+
+  date(value: string): string {
+    return new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' }).format(new Date(value));
   }
 
   private updateWorkspaceUrl(): Promise<boolean> {

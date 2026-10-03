@@ -5,6 +5,24 @@ import type { ToastService } from '../../core/notifications/toast.service';
 import { FinancePage } from './finance';
 
 describe('FinancePage payment validation', () => {
+  it('opens and closes payment and expense detail records', () => {
+    const page = createPage();
+    const payment = paymentRecord();
+    const expense = expenseRecord();
+
+    page.viewPayment(payment);
+    expect(page.selectedPayment()).toBe(payment);
+    expect(page.selectedExpense()).toBeNull();
+
+    page.viewExpense(expense);
+    expect(page.selectedExpense()).toBe(expense);
+    expect(page.selectedPayment()).toBeNull();
+
+    page.closeRecordDetails();
+    expect(page.selectedExpense()).toBeNull();
+    expect(page.selectedPayment()).toBeNull();
+  });
+
   it('allows an initial client payment without a subscription', () => {
     const page = createPage();
     page.paymentForm = {
@@ -97,4 +115,43 @@ function createPage(): FinancePage {
     { snapshot: { queryParamMap } } as never,
     { navigate: vi.fn().mockResolvedValue(true) } as never,
   );
+}
+
+function paymentRecord() {
+  return {
+    id: 'payment-1',
+    batchId: null,
+    subscriptionId: null,
+    renewalId: null,
+    purpose: 'INITIAL' as const,
+    description: null,
+    amount: '1500.00',
+    currency: 'PHP',
+    reference: 'OR-001',
+    paidAt: '2026-10-02T00:00:00.000Z',
+    notes: null,
+    status: 'POSTED' as const,
+    voidedAt: null,
+    voidReason: null,
+    client: { id: 'client-1', businessName: 'RFI LPG STORE', group: null },
+    plan: null,
+    renewal: null,
+  };
+}
+
+function expenseRecord() {
+  return {
+    id: 'expense-1',
+    category: 'OPERATIONS' as const,
+    description: 'VPS hosting',
+    amount: '800.00',
+    currency: 'PHP',
+    incurredAt: '2026-10-02T00:00:00.000Z',
+    vendor: 'Hosting vendor',
+    reference: null,
+    notes: null,
+    createdById: 'actor-1',
+    createdAt: '2026-10-02T00:00:00.000Z',
+    updatedAt: '2026-10-02T00:00:00.000Z',
+  };
 }

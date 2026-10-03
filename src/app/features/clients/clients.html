@@ -263,7 +263,7 @@
       </div>
 
       <div
-        class="hidden grid-cols-[minmax(13rem,1.5fr)_minmax(8rem,0.7fr)_7rem_8rem_6rem] gap-3 border-y border-champagne-300 bg-champagne-200/60 px-5 py-2 text-[11px] font-bold uppercase text-ink-500 lg:grid"
+        class="hidden grid-cols-[minmax(13rem,1.5fr)_minmax(8rem,0.7fr)_7rem_8rem_8rem] gap-3 border-y border-champagne-300 bg-champagne-200/60 px-5 py-2 text-[11px] font-bold uppercase text-ink-500 lg:grid"
       >
         <span>Group</span><span>Code</span><span>Clients</span><span>Status</span
         ><span class="text-right">Action</span>
@@ -271,8 +271,9 @@
       <div class="data-list lg:rounded-t-none lg:border-t-0">
         @for (group of visibleGroups; track group.id) {
           <article
-            class="data-row grid-cols-[1fr_auto] lg:grid-cols-[minmax(13rem,1.5fr)_minmax(8rem,0.7fr)_7rem_8rem_6rem]"
+            class="data-row cursor-pointer grid-cols-[1fr_auto] lg:grid-cols-[minmax(13rem,1.5fr)_minmax(8rem,0.7fr)_7rem_8rem_8rem]"
             [class.opacity-60]="group.status === 'ARCHIVED'"
+            (click)="openGroupDetails(group)"
           >
             <div class="min-w-0">
               <p class="truncate text-sm font-bold">{{ group.name }}</p>
@@ -281,13 +282,9 @@
               </p>
             </div>
             <p class="hidden text-sm font-semibold text-ink-600 lg:block">{{ group.code }}</p>
-            <button
-              type="button"
-              class="hidden text-left text-sm font-bold text-gold-800 hover:underline lg:block"
-              (click)="showGroupClients(group)"
-            >
+            <span class="hidden text-sm font-bold text-gold-800 lg:block">
               {{ group.clientCount }}
-            </button>
+            </span>
             <span
               class="status-chip"
               [class]="
@@ -297,11 +294,25 @@
               "
               >{{ group.status }}</span
             >
-            @if (canManageGroups) {
-              <button type="button" class="text-button justify-self-end" (click)="editGroup(group)">
-                Edit
+            <div class="flex justify-self-end">
+              <button
+                type="button"
+                class="icon-button"
+                [attr.aria-label]="'View ' + group.name + ' group details and members'"
+                (click)="$event.stopPropagation(); openGroupDetails(group)"
+              >
+                <svg lucideEye class="size-4"></svg>
               </button>
-            }
+              @if (canManageGroups) {
+                <button
+                  type="button"
+                  class="text-button"
+                  (click)="$event.stopPropagation(); editGroup(group)"
+                >
+                  Edit
+                </button>
+              }
+            </div>
           </article>
         } @empty {
           <div class="empty-state">
@@ -314,6 +325,138 @@
     </section>
   }
 </div>
+
+@if (selectedGroup(); as group) {
+  <div class="sheet-backdrop" (click)="closeGroupDetails()">
+    <section
+      appDialogFocus
+      class="sheet-panel sheet-panel-inspector"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="group-details-title"
+      aria-describedby="group-details-description"
+      (dialogEscape)="closeGroupDetails()"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="sheet-header">
+        <div class="min-w-0">
+          <p class="page-eyebrow">Group details</p>
+          <div class="flex items-center gap-2">
+            <h2 id="group-details-title" class="truncate text-xl font-bold">{{ group.name }}</h2>
+            <span
+              class="status-chip shrink-0"
+              [class]="
+                group.status === 'ACTIVE'
+                  ? 'bg-success-100 text-success-700'
+                  : 'bg-champagne-200 text-ink-600'
+              "
+              >{{ group.status }}</span
+            >
+          </div>
+          <p id="group-details-description" class="mt-1 text-xs text-ink-500">
+            {{ group.code }} · {{ group.clientCount }}
+            {{ group.clientCount === 1 ? 'member' : 'members' }}
+          </p>
+        </div>
+        <button
+          data-dialog-initial-focus
+          type="button"
+          class="icon-button"
+          aria-label="Close group details"
+          (click)="closeGroupDetails()"
+        >
+          <svg lucideX class="size-5"></svg>
+        </button>
+      </header>
+
+      <div class="sheet-body space-y-0">
+        <section class="border-b border-champagne-300 pb-5">
+          <p class="text-sm leading-6 text-ink-700">
+            {{ group.description || 'No description has been added for this group.' }}
+          </p>
+          <dl class="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-xs">
+            <div>
+              <dt class="font-semibold text-ink-400">Created</dt>
+              <dd class="mt-1 font-semibold text-ink-800">{{ date(group.createdAt) }}</dd>
+            </div>
+            <div>
+              <dt class="font-semibold text-ink-400">Last updated</dt>
+              <dd class="mt-1 font-semibold text-ink-800">{{ date(group.updatedAt) }}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="pt-5">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 class="text-sm font-bold">Members</h3>
+              <p class="mt-0.5 text-xs text-ink-500">
+                Businesses currently assigned to this group.
+              </p>
+            </div>
+            <span class="text-xs font-bold tabular-nums text-ink-600">
+              {{ groupMembersLoading() ? 'Loading' : groupMembers().length }}
+            </span>
+          </div>
+
+          @if (groupMembersLoading()) {
+            <div class="loading-line"></div>
+          } @else if (groupMembersError()) {
+            <div
+              class="border-l-2 border-danger-700 bg-danger-100 px-4 py-3 text-sm text-danger-700"
+            >
+              <p>{{ groupMembersError() }}</p>
+              <button
+                type="button"
+                class="mt-2 font-bold underline"
+                (click)="openGroupDetails(group)"
+              >
+                Try again
+              </button>
+            </div>
+          } @else {
+            <div class="divide-y divide-champagne-200 border-y border-champagne-300">
+              @for (member of groupMembers(); track member.id) {
+                <div class="flex items-start justify-between gap-4 py-3">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <p class="truncate text-sm font-bold">{{ member.businessName }}</p>
+                      <span class="status-chip shrink-0" [class]="statusClass(member.status)">
+                        {{ member.status }}
+                      </span>
+                    </div>
+                    <p class="mt-1 truncate text-xs text-ink-600">
+                      {{ member.code }} · {{ member.ownerName || 'No contact name' }}
+                    </p>
+                    @if (member.email || member.phone) {
+                      <p class="mt-1 truncate text-[11px] text-ink-400">
+                        {{ member.email || member.phone }}
+                      </p>
+                    }
+                  </div>
+                </div>
+              } @empty {
+                <div class="py-8 text-center">
+                  <p class="text-sm font-semibold text-ink-700">No members in this group</p>
+                  <p class="mt-1 text-xs text-ink-500">Assign clients from the Clients tab.</p>
+                </div>
+              }
+            </div>
+          }
+        </section>
+      </div>
+
+      <footer class="sheet-footer">
+        <button type="button" class="secondary-button flex-1" (click)="closeGroupDetails()">
+          Close
+        </button>
+        <button type="button" class="primary-button flex-1" (click)="showGroupClients(group)">
+          View in Clients
+        </button>
+      </footer>
+    </section>
+  </div>
+}
 
 @if (editorOpen()) {
   <div class="sheet-backdrop" (click)="closeEditor()">

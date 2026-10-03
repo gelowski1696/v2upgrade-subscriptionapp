@@ -248,8 +248,9 @@
           <div class="data-list">
             @for (payment of payments(); track payment.id) {
               <div
-                class="data-row grid-cols-[1fr_auto]"
+                class="data-row cursor-pointer grid-cols-[1fr_auto]"
                 [class.opacity-70]="payment.status === 'VOIDED'"
+                (click)="viewPayment(payment)"
               >
                 <div class="min-w-0">
                   <div class="flex min-w-0 items-center gap-2">
@@ -298,13 +299,21 @@
                   >
                     {{ money(payment.amount) }}
                   </p>
+                  <button
+                    type="button"
+                    class="flex size-10 items-center justify-center rounded-md text-ink-400 transition hover:bg-champagne-200 hover:text-ink-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500"
+                    [attr.aria-label]="'View payment for ' + payment.client.businessName"
+                    (click)="$event.stopPropagation(); viewPayment(payment)"
+                  >
+                    <svg lucideEye class="size-4"></svg>
+                  </button>
                   @if (canAdminister && payment.status === 'POSTED') {
                     <button
                       type="button"
                       class="flex size-10 items-center justify-center rounded-md text-ink-400 transition hover:bg-danger-100 hover:text-danger-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger-700"
                       [attr.aria-label]="'Void payment for ' + payment.client.businessName"
                       [disabled]="saving()"
-                      (click)="requestVoidPayment(payment)"
+                      (click)="$event.stopPropagation(); requestVoidPayment(payment)"
                     >
                       <svg lucideBan class="size-4"></svg>
                     </button>
@@ -351,7 +360,10 @@
           </div>
           <div class="data-list">
             @for (expense of expenses(); track expense.id) {
-              <div class="data-row grid-cols-[1fr_auto]">
+              <div
+                class="data-row cursor-pointer grid-cols-[1fr_auto]"
+                (click)="viewExpense(expense)"
+              >
                 <div class="min-w-0">
                   <p class="truncate text-sm font-bold">{{ expense.description }}</p>
                   <p class="mt-1 truncate text-xs text-ink-600">
@@ -365,13 +377,21 @@
                   <p class="text-sm font-bold tabular-nums text-danger-700">
                     {{ money(expense.amount) }}
                   </p>
+                  <button
+                    type="button"
+                    class="flex size-10 items-center justify-center rounded-md text-ink-400 transition hover:bg-champagne-200 hover:text-ink-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500"
+                    [attr.aria-label]="'View expense ' + expense.description"
+                    (click)="$event.stopPropagation(); viewExpense(expense)"
+                  >
+                    <svg lucideEye class="size-4"></svg>
+                  </button>
                   @if (canAdminister) {
                     <button
                       type="button"
                       class="flex size-10 items-center justify-center text-ink-400 hover:text-danger-700"
                       [attr.aria-label]="'Delete expense ' + expense.description"
                       [disabled]="saving()"
-                      (click)="requestDeleteExpense(expense)"
+                      (click)="$event.stopPropagation(); requestDeleteExpense(expense)"
                     >
                       <svg lucideTrash2 class="size-4"></svg>
                     </button>
@@ -390,6 +410,223 @@
     }
   }
 </div>
+
+@if (selectedPayment(); as payment) {
+  <div class="sheet-backdrop" (click)="closeRecordDetails()">
+    <section
+      appDialogFocus
+      class="sheet-panel sheet-panel-inspector"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="payment-details-title"
+      (dialogEscape)="closeRecordDetails()"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="sheet-header">
+        <div class="min-w-0">
+          <p class="page-eyebrow">Payment details</p>
+          <div class="flex items-center gap-2">
+            <h2 id="payment-details-title" class="truncate text-xl font-bold">
+              {{ payment.client.businessName }}
+            </h2>
+            <span
+              class="status-chip shrink-0"
+              [class]="
+                payment.status === 'POSTED'
+                  ? 'bg-success-100 text-success-700'
+                  : 'bg-champagne-200 text-ink-600'
+              "
+              >{{ payment.status }}</span
+            >
+          </div>
+        </div>
+        <button
+          data-dialog-initial-focus
+          type="button"
+          class="icon-button"
+          aria-label="Close payment details"
+          (click)="closeRecordDetails()"
+        >
+          <svg lucideX class="size-5"></svg>
+        </button>
+      </header>
+
+      <div class="sheet-body">
+        <section class="border-y border-champagne-300 bg-champagne-100/60 px-4 py-4">
+          <p class="text-xs font-semibold text-ink-500">Amount received</p>
+          <p
+            class="mt-1 text-3xl font-bold tabular-nums"
+            [class.text-success-700]="payment.status === 'POSTED'"
+            [class.text-ink-400]="payment.status === 'VOIDED'"
+            [class.line-through]="payment.status === 'VOIDED'"
+          >
+            {{ money(payment.amount) }}
+          </p>
+          <p class="mt-1 text-xs text-ink-500">Paid {{ date(payment.paidAt) }}</p>
+        </section>
+
+        <dl class="grid grid-cols-2 gap-x-5 gap-y-5 py-1 text-sm">
+          <div>
+            <dt class="text-xs font-semibold text-ink-400">Purpose</dt>
+            <dd class="mt-1 font-semibold text-ink-800">
+              {{ paymentPurposeLabel(payment.purpose) }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold text-ink-400">Plan</dt>
+            <dd class="mt-1 font-semibold text-ink-800">
+              {{ payment.plan?.name || 'Not linked to a plan' }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold text-ink-400">Client group</dt>
+            <dd class="mt-1 font-semibold text-ink-800">
+              {{ payment.client.group?.name || 'Ungrouped' }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold text-ink-400">Reference</dt>
+            <dd class="mt-1 break-words font-semibold text-ink-800">
+              {{ payment.reference || 'No reference' }}
+            </dd>
+          </div>
+          @if (payment.batchId) {
+            <div class="col-span-2">
+              <dt class="text-xs font-semibold text-ink-400">Group payment batch</dt>
+              <dd class="mt-1 break-all font-mono text-xs text-ink-700">{{ payment.batchId }}</dd>
+            </div>
+          }
+          @if (payment.renewal) {
+            <div class="col-span-2">
+              <dt class="text-xs font-semibold text-ink-400">Renewal period</dt>
+              <dd class="mt-1 font-semibold text-ink-800">
+                {{ date(payment.renewal.periodStartsAt) }} –
+                {{ date(payment.renewal.periodEndsAt) }}
+              </dd>
+            </div>
+          }
+          @if (payment.description) {
+            <div class="col-span-2">
+              <dt class="text-xs font-semibold text-ink-400">Description</dt>
+              <dd class="mt-1 whitespace-pre-wrap leading-6 text-ink-800">
+                {{ payment.description }}
+              </dd>
+            </div>
+          }
+          @if (payment.notes) {
+            <div class="col-span-2 border-t border-champagne-300 pt-4">
+              <dt class="text-xs font-semibold text-ink-400">Notes</dt>
+              <dd class="mt-1 whitespace-pre-wrap leading-6 text-ink-800">{{ payment.notes }}</dd>
+            </div>
+          }
+          @if (payment.status === 'VOIDED') {
+            <div class="col-span-2 border-l-2 border-danger-700 bg-danger-100 px-4 py-3">
+              <dt class="text-xs font-bold text-danger-700">
+                Voided{{ payment.voidedAt ? ' ' + date(payment.voidedAt) : '' }}
+              </dt>
+              <dd class="mt-1 text-sm leading-6 text-danger-700">
+                {{ payment.voidReason || 'No reason recorded.' }}
+              </dd>
+            </div>
+          }
+          <div class="col-span-2 border-t border-champagne-300 pt-4">
+            <dt class="text-xs font-semibold text-ink-400">Record ID</dt>
+            <dd class="mt-1 break-all font-mono text-xs text-ink-600">{{ payment.id }}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <footer class="sheet-footer">
+        <button type="button" class="secondary-button w-full" (click)="closeRecordDetails()">
+          Close
+        </button>
+      </footer>
+    </section>
+  </div>
+}
+
+@if (selectedExpense(); as expense) {
+  <div class="sheet-backdrop" (click)="closeRecordDetails()">
+    <section
+      appDialogFocus
+      class="sheet-panel sheet-panel-inspector"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="expense-details-title"
+      (dialogEscape)="closeRecordDetails()"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="sheet-header">
+        <div class="min-w-0">
+          <p class="page-eyebrow">Expense details</p>
+          <h2 id="expense-details-title" class="truncate text-xl font-bold">
+            {{ expense.description }}
+          </h2>
+        </div>
+        <button
+          data-dialog-initial-focus
+          type="button"
+          class="icon-button"
+          aria-label="Close expense details"
+          (click)="closeRecordDetails()"
+        >
+          <svg lucideX class="size-5"></svg>
+        </button>
+      </header>
+
+      <div class="sheet-body">
+        <section class="border-y border-champagne-300 bg-champagne-100/60 px-4 py-4">
+          <p class="text-xs font-semibold text-ink-500">Recorded expense</p>
+          <p class="mt-1 text-3xl font-bold tabular-nums text-danger-700">
+            {{ money(expense.amount) }}
+          </p>
+          <p class="mt-1 text-xs text-ink-500">Incurred {{ date(expense.incurredAt) }}</p>
+        </section>
+
+        <dl class="grid grid-cols-2 gap-x-5 gap-y-5 py-1 text-sm">
+          <div>
+            <dt class="text-xs font-semibold text-ink-400">Category</dt>
+            <dd class="mt-1 font-semibold text-ink-800">
+              {{ categoryLabel(expense.category) }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold text-ink-400">Vendor</dt>
+            <dd class="mt-1 font-semibold text-ink-800">
+              {{ expense.vendor || 'No vendor' }}
+            </dd>
+          </div>
+          <div class="col-span-2">
+            <dt class="text-xs font-semibold text-ink-400">Reference</dt>
+            <dd class="mt-1 break-words font-semibold text-ink-800">
+              {{ expense.reference || 'No reference' }}
+            </dd>
+          </div>
+          @if (expense.notes) {
+            <div class="col-span-2 border-t border-champagne-300 pt-4">
+              <dt class="text-xs font-semibold text-ink-400">Notes</dt>
+              <dd class="mt-1 whitespace-pre-wrap leading-6 text-ink-800">{{ expense.notes }}</dd>
+            </div>
+          }
+          <div class="col-span-2 border-t border-champagne-300 pt-4">
+            <dt class="text-xs font-semibold text-ink-400">Recorded</dt>
+            <dd class="mt-1 font-semibold text-ink-800">{{ date(expense.createdAt) }}</dd>
+          </div>
+          <div class="col-span-2">
+            <dt class="text-xs font-semibold text-ink-400">Record ID</dt>
+            <dd class="mt-1 break-all font-mono text-xs text-ink-600">{{ expense.id }}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <footer class="sheet-footer">
+        <button type="button" class="secondary-button w-full" (click)="closeRecordDetails()">
+          Close
+        </button>
+      </footer>
+    </section>
+  </div>
+}
 
 @if (expenseOpen()) {
   <div class="sheet-backdrop" (click)="expenseOpen.set(false)">
