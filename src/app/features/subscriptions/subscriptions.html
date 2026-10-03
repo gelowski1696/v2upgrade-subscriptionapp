@@ -66,7 +66,13 @@
   @if (loading()) {
     <div class="loading-line"></div>
   }
-  <section class="data-list">
+  <div
+    class="hidden grid-cols-[minmax(15rem,1.5fr)_minmax(11rem,1fr)_minmax(9rem,0.8fr)_minmax(8rem,0.7fr)] gap-3 border-y border-champagne-300 bg-champagne-200/60 px-5 py-2 text-[11px] font-bold uppercase text-ink-500 lg:grid"
+  >
+    <span>Client</span><span>Plan</span><span>Coverage ends</span
+    ><span class="text-right">Price</span>
+  </div>
+  <section class="data-list lg:rounded-t-none lg:border-t-0">
     @for (subscription of subscriptions(); track subscription.id) {
       <button
         type="button"
@@ -83,7 +89,14 @@
           <p class="mt-1 truncate text-xs text-ink-600">
             {{ subscription.planVersion.plan.name }} · {{ subscription.client.code }}
           </p>
-          <p class="mt-1 text-[11px] text-ink-400">Ends {{ date(subscription.expiresAt) }}</p>
+          <p class="mt-1 text-[11px] text-ink-400">
+            Ends {{ date(subscription.expiresAt) }} ·
+            {{
+              overrideCount(subscription)
+                ? overrideCount(subscription) + ' overrides'
+                : 'Plan defaults'
+            }}
+          </p>
         </div>
         <p class="hidden truncate text-left text-sm text-ink-600 lg:block">
           {{ subscription.planVersion.plan.name }}
@@ -139,7 +152,7 @@
   <div class="sheet-backdrop" (click)="editorOpen.set(false)">
     <section
       appDialogFocus
-      class="sheet-panel"
+      class="sheet-panel sheet-panel-wide"
       role="dialog"
       aria-modal="true"
       aria-labelledby="subscription-editor-title"
@@ -160,82 +173,149 @@
           <svg lucideX class="size-5"></svg>
         </button>
       </header>
+      <nav class="editor-tabs" aria-label="Subscription editor sections">
+        <button
+          type="button"
+          class="editor-tab"
+          [attr.aria-selected]="editorTab === 'setup'"
+          (click)="editorTab = 'setup'"
+        >
+          Setup
+        </button>
+        <button
+          type="button"
+          class="editor-tab"
+          [attr.aria-selected]="editorTab === 'features'"
+          (click)="editorTab = 'features'"
+          [disabled]="!form.planVersionId"
+        >
+          Features
+          @if (createOverrideCount) {
+            <span class="ml-1 text-xs text-gold-800">{{ createOverrideCount }} overrides</span>
+          }
+        </button>
+      </nav>
       <form (ngSubmit)="save()">
         <div class="sheet-body">
-          <label
-            ><span class="field-label">Client *</span
-            ><select
-              name="client"
-              data-dialog-initial-focus
-              class="field-control"
-              [(ngModel)]="form.clientId"
-              required
-            >
-              <option value="" disabled>Select client</option>
-              @for (client of clients(); track client.id) {
-                <option [value]="client.id">{{ client.businessName }} ({{ client.code }})</option>
-              }
-            </select></label
-          >
-          <label
-            ><span class="field-label">Plan *</span
-            ><select
-              name="plan"
-              class="field-control"
-              [(ngModel)]="form.planVersionId"
-              (ngModelChange)="planChanged()"
-              required
-            >
-              <option value="" disabled>Select published plan</option>
-              @for (plan of plans(); track plan.id) {
-                <option [value]="plan.versions[0].id">
-                  {{ plan.name }} · {{ plan.versions[0].currency }} {{ plan.versions[0].amount }}
-                </option>
-              }
-            </select></label
-          >
-          <label
-            ><span class="field-label">Device ID *</span
-            ><input
-              name="deviceId"
-              class="field-control font-mono uppercase"
-              type="text"
-              minlength="8"
-              maxlength="120"
-              autocomplete="off"
-              placeholder="POS-DEVICE-ID"
-              [(ngModel)]="form.deviceId"
-              required
-            />
-            <span class="mt-1 block text-[11px] text-ink-500"
-              >Enter the Device ID shown by the client's Windows POS.</span
-            ></label
-          >
-          <div class="grid gap-4 sm:grid-cols-2">
-            <label
-              ><span class="field-label">Start date</span
-              ><input
-                name="startsAt"
-                class="field-control"
-                type="date"
-                [(ngModel)]="form.startsAt" /></label
-            ><label
-              ><span class="field-label">Custom expiry</span
-              ><input
-                name="expiresAt"
-                class="field-control"
-                type="date"
-                [(ngModel)]="form.expiresAt"
-            /></label>
-          </div>
-          <label
-            ><span class="field-label">Notes</span
-            ><textarea
-              name="notes"
-              class="field-control min-h-24 py-3"
-              [(ngModel)]="form.notes"
-            ></textarea>
-          </label>
+          @if (editorTab === 'setup') {
+            <div class="mx-auto max-w-2xl space-y-4">
+              <div class="grid gap-4 sm:grid-cols-2">
+                <label>
+                  <span class="field-label">Find client</span>
+                  <input
+                    name="clientOptionSearch"
+                    class="field-control"
+                    [(ngModel)]="clientOptionSearch"
+                    placeholder="Name or code"
+                    autocomplete="off"
+                  />
+                </label>
+                <label>
+                  <span class="field-label">Find plan</span>
+                  <input
+                    name="planOptionSearch"
+                    class="field-control"
+                    [(ngModel)]="planOptionSearch"
+                    placeholder="Name or code"
+                    autocomplete="off"
+                  />
+                </label>
+              </div>
+              <label
+                ><span class="field-label">Client *</span
+                ><select
+                  name="client"
+                  data-dialog-initial-focus
+                  class="field-control"
+                  [(ngModel)]="form.clientId"
+                  required
+                >
+                  <option value="" disabled>Select client</option>
+                  @for (client of filteredClients; track client.id) {
+                    <option [value]="client.id">
+                      {{ client.businessName }} ({{ client.code }})
+                    </option>
+                  }
+                </select></label
+              >
+              <label
+                ><span class="field-label">Plan *</span
+                ><select
+                  name="plan"
+                  class="field-control"
+                  [(ngModel)]="form.planVersionId"
+                  (ngModelChange)="planChanged()"
+                  required
+                >
+                  <option value="" disabled>Select published plan</option>
+                  @for (plan of filteredPlans; track plan.id) {
+                    <option [value]="plan.versions[0].id">
+                      {{ plan.name }} · {{ plan.versions[0].currency }}
+                      {{ plan.versions[0].amount }}
+                    </option>
+                  }
+                </select></label
+              >
+              <label
+                ><span class="field-label">Device ID *</span
+                ><input
+                  name="deviceId"
+                  class="field-control font-mono uppercase"
+                  type="text"
+                  minlength="8"
+                  maxlength="120"
+                  autocomplete="off"
+                  placeholder="POS-DEVICE-ID"
+                  [(ngModel)]="form.deviceId"
+                  required
+                />
+                <span class="mt-1 block text-[11px] text-ink-500"
+                  >Enter the Device ID shown by the client's Windows POS.</span
+                ></label
+              >
+              <div class="grid gap-4 sm:grid-cols-2">
+                <label
+                  ><span class="field-label">Start date</span
+                  ><input
+                    name="startsAt"
+                    class="field-control"
+                    type="date"
+                    [(ngModel)]="form.startsAt" /></label
+                ><label
+                  ><span class="field-label">Custom expiry</span
+                  ><input
+                    name="expiresAt"
+                    class="field-control"
+                    type="date"
+                    [(ngModel)]="form.expiresAt"
+                /></label>
+              </div>
+              <label
+                ><span class="field-label">Notes</span
+                ><textarea
+                  name="notes"
+                  class="field-control min-h-24 py-3"
+                  [(ngModel)]="form.notes"
+                ></textarea>
+              </label>
+            </div>
+          } @else {
+            <section>
+              <div class="mb-5">
+                <h3 class="text-base font-bold">Subscription features</h3>
+                <p class="mt-1 text-sm text-ink-500">
+                  Starts with the selected plan's access. Changes here apply only to this
+                  subscription.
+                </p>
+              </div>
+              <app-feature-editor
+                [values]="form.features"
+                [baseline]="createFeatureBaseline"
+                [readOnlyKeys]="createReadOnlyKeys"
+                (valuesChange)="setCreateFeatures($event)"
+              />
+            </section>
+          }
         </div>
         <footer class="sheet-footer">
           <button
@@ -438,7 +518,7 @@
   <div class="sheet-backdrop" (click)="selected.set(null)">
     <section
       appDialogFocus
-      class="sheet-panel"
+      class="sheet-panel sheet-panel-wide"
       role="dialog"
       aria-modal="true"
       aria-labelledby="subscription-details-title"
@@ -457,178 +537,195 @@
           <svg lucideX class="size-5"></svg>
         </button>
       </header>
+      <nav class="editor-tabs" aria-label="Subscription details sections">
+        <button
+          type="button"
+          class="editor-tab"
+          [attr.aria-selected]="detailTab === 'overview'"
+          (click)="detailTab = 'overview'"
+        >
+          Overview
+        </button>
+        <button
+          type="button"
+          class="editor-tab"
+          [attr.aria-selected]="detailTab === 'features'"
+          (click)="detailTab = 'features'"
+        >
+          Features <span class="ml-1 text-xs text-ink-400">{{ subscriptionOverrideCount }}</span>
+        </button>
+        <button
+          type="button"
+          class="editor-tab"
+          [attr.aria-selected]="detailTab === 'renewals'"
+          (click)="detailTab = 'renewals'"
+        >
+          Renewals <span class="ml-1 text-xs text-ink-400">{{ renewalHistory().length }}</span>
+        </button>
+      </nav>
       <div class="sheet-body">
-        <div class="flex items-center justify-between border-b border-champagne-300 pb-4">
-          <div>
-            <p class="text-xs text-ink-600">Plan</p>
-            <p class="mt-1 font-bold">{{ subscription.planVersion.plan.name }}</p>
-          </div>
-          <span class="status-chip" [class]="statusClasses(subscription.status)">{{
-            subscription.status
-          }}</span>
-        </div>
-        <dl class="grid grid-cols-2 gap-x-4 gap-y-5 text-sm">
-          <div>
-            <dt class="text-xs text-ink-600">Amount</dt>
-            <dd class="mt-1 font-bold tabular-nums">{{ money(subscription) }}</dd>
-          </div>
-          <div>
-            <dt class="text-xs text-ink-600">Billing</dt>
-            <dd class="mt-1 font-semibold">{{ subscription.billingInterval.toLowerCase() }}</dd>
-          </div>
-          <div>
-            <dt class="text-xs text-ink-600">Started</dt>
-            <dd class="mt-1 font-semibold">{{ date(subscription.startsAt) }}</dd>
-          </div>
-          <div>
-            <dt class="text-xs text-ink-600">Expires</dt>
-            <dd class="mt-1 font-semibold">{{ date(subscription.expiresAt) }}</dd>
-          </div>
-          <div>
-            <dt class="text-xs text-ink-600">Device limit</dt>
-            <dd class="mt-1 font-semibold">{{ subscription.maxDevices }}</dd>
-          </div>
-          <div>
-            <dt class="text-xs text-ink-600">Plan version</dt>
-            <dd class="mt-1 font-semibold">{{ subscription.planVersion.version }}</dd>
-          </div>
-          <div class="col-span-2">
-            <dt class="text-xs text-ink-600">Device ID</dt>
-            <dd class="mt-2 flex gap-2">
-              <input
-                class="field-control min-w-0 flex-1 font-mono uppercase"
-                type="text"
-                maxlength="120"
-                autocomplete="off"
-                [(ngModel)]="deviceIdDraft"
-                aria-label="Subscription Device ID"
-                [readonly]="!canOperate"
-              />
-              @if (canOperate) {
-                <button
-                  type="button"
-                  class="secondary-button shrink-0"
-                  [disabled]="saving() || !validDeviceIdDraft"
-                  (click)="updateDevice(subscription)"
-                >
-                  Update
-                </button>
-              }
-            </dd>
-          </div>
-        </dl>
-        <section class="border-t border-champagne-300 pt-4">
-          <div class="flex min-h-14 items-center justify-between gap-5">
+        @if (detailTab === 'overview') {
+          <div class="flex items-center justify-between border-b border-champagne-300 pb-4">
             <div>
-              <h3 class="text-sm font-bold">Owner web dashboard</h3>
-              <p class="mt-1 text-xs leading-5 text-ink-500">
-                Controls desktop synchronization, web-user access, and owner portal sessions.
-              </p>
-              <p
-                class="mt-2 text-xs font-semibold"
-                [class.text-success-700]="webDashboardDraft"
-                [class.text-danger-700]="!webDashboardDraft"
-              >
-                {{ webDashboardDraft ? 'Enabled' : 'Disabled' }}
-              </p>
+              <p class="text-xs text-ink-600">Plan</p>
+              <p class="mt-1 font-bold">{{ subscription.planVersion.plan.name }}</p>
             </div>
-            <div class="flex shrink-0 items-center gap-3">
-              <input
-                name="subscription-web-dashboard"
-                type="checkbox"
-                class="size-5 accent-gold-500"
-                [(ngModel)]="webDashboardDraft"
-                [disabled]="!canAdminister || saving()"
-                aria-label="Owner web dashboard access"
-              />
+            <span class="status-chip" [class]="statusClasses(subscription.status)">{{
+              subscription.status
+            }}</span>
+          </div>
+          <dl class="grid grid-cols-2 gap-x-4 gap-y-5 text-sm">
+            <div>
+              <dt class="text-xs text-ink-600">Amount</dt>
+              <dd class="mt-1 font-bold tabular-nums">{{ money(subscription) }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-ink-600">Billing</dt>
+              <dd class="mt-1 font-semibold">{{ subscription.billingInterval.toLowerCase() }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-ink-600">Original start</dt>
+              <dd class="mt-1 font-semibold">{{ date(subscription.startsAt) }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-ink-600">Current coverage ends</dt>
+              <dd class="mt-1 font-semibold">{{ date(subscription.expiresAt) }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-ink-600">Device limit</dt>
+              <dd class="mt-1 font-semibold">{{ subscription.maxDevices }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-ink-600">Plan version</dt>
+              <dd class="mt-1 font-semibold">{{ subscription.planVersion.version }}</dd>
+            </div>
+            <div class="col-span-2">
+              <dt class="text-xs text-ink-600">Device ID</dt>
+              <dd class="mt-2 flex gap-2">
+                <input
+                  class="field-control min-w-0 flex-1 font-mono uppercase"
+                  type="text"
+                  maxlength="120"
+                  autocomplete="off"
+                  [(ngModel)]="deviceIdDraft"
+                  aria-label="Subscription Device ID"
+                  [readonly]="!canOperate"
+                />
+                @if (canOperate) {
+                  <button
+                    type="button"
+                    class="secondary-button shrink-0"
+                    [disabled]="saving() || !validDeviceIdDraft"
+                    (click)="updateDevice(subscription)"
+                  >
+                    Update
+                  </button>
+                }
+              </dd>
+            </div>
+          </dl>
+          @if (subscription.notes) {
+            <div class="mt-5 border-t border-champagne-300 pt-4">
+              <p class="text-xs text-ink-600">Notes</p>
+              <p class="mt-1 whitespace-pre-line text-sm">{{ subscription.notes }}</p>
+            </div>
+          }
+        } @else if (detailTab === 'features') {
+          <section>
+            <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 class="text-base font-bold">Subscription features</h3>
+                <p class="mt-1 text-sm text-ink-500">
+                  Plan defaults stay visible; overrides apply only to this subscription.
+                </p>
+              </div>
               @if (canAdminister) {
                 <button
                   type="button"
-                  class="secondary-button"
-                  [disabled]="saving()"
-                  (click)="updateWebDashboard(subscription)"
+                  class="primary-button"
+                  [disabled]="saving() || !subscriptionFeaturesDirty"
+                  (click)="updateFeatureMods(subscription)"
                 >
-                  Save
+                  {{ saving() ? 'Saving' : subscriptionFeaturesDirty ? 'Save changes' : 'Saved' }}
                 </button>
               }
             </div>
-          </div>
-        </section>
-        <section class="border-t border-champagne-300 pt-4">
-          <div class="mb-3 flex items-start justify-between gap-4">
-            <div>
-              <h3 class="text-sm font-bold">Feature mods</h3>
-              <p class="mt-1 text-xs leading-5 text-ink-500">
-                Controls optional workflows in this client's POS and owner web dashboard.
-              </p>
-            </div>
-            @if (canAdminister) {
-              <button
-                type="button"
-                class="secondary-button shrink-0"
-                [disabled]="saving()"
-                (click)="updateFeatureMods(subscription)"
-              >
-                {{ saving() ? 'Saving' : 'Save mods' }}
-              </button>
-            }
-          </div>
-          <div class="space-y-5">
-            @for (group of featureModGroups; track group.label) {
-              <section>
-                <h4 class="mb-1 text-[11px] font-bold uppercase tracking-wide text-ink-500">
-                  {{ group.label }}
-                </h4>
-                <div class="divide-y divide-champagne-200">
-                  @for (feature of group.features; track feature[0]) {
-                    <label class="flex min-h-11 items-center justify-between gap-4">
-                      <span class="text-sm">{{ feature[1] }}</span>
-                      <input
-                        [name]="'subscription-feature-' + feature[0]"
-                        type="checkbox"
-                        class="size-5 shrink-0 accent-gold-500"
-                        [(ngModel)]="featureModsDraft[feature[0]]"
-                        [disabled]="!canAdminister || saving()"
-                      />
-                    </label>
-                  }
-                </div>
-              </section>
-            }
-          </div>
-        </section>
-        <section class="border-t border-champagne-300 pt-4">
-          <div class="mb-3">
-            <h3 class="text-sm font-bold">Renewal history</h3>
-            <p class="mt-1 text-xs text-ink-500">
-              Coverage periods added after the original subscription.
+            <app-feature-editor
+              [values]="featureValuesDraft"
+              [baseline]="featureBaseline"
+              [readOnlyKeys]="subscriptionReadOnlyKeys"
+              (valuesChange)="setSubscriptionFeatures($event)"
+            />
+            <p class="mt-4 text-xs leading-5 text-ink-500">
+              Web access changes immediately. POS features update at the next license check.
             </p>
-          </div>
-          <div class="divide-y divide-champagne-200 border-y border-champagne-200">
-            @for (renewal of renewalHistory(); track renewal.id) {
-              <div class="flex items-center justify-between gap-4 py-3 text-sm">
-                <div>
-                  <p class="font-semibold">
-                    {{ date(renewal.periodStartsAt) }} – {{ date(renewal.periodEndsAt) }}
-                  </p>
-                  @if (renewal.reason) {
-                    <p class="mt-1 text-xs text-ink-500">{{ renewal.reason }}</p>
-                  }
-                </div>
-                <p class="shrink-0 font-bold tabular-nums">
-                  {{ renewal.currency }} {{ renewal.amount }}
+            @if (subscriptionFeaturesDirty) {
+              <p class="mt-2 text-xs font-bold text-gold-800">Unsaved feature changes</p>
+            }
+          </section>
+        } @else {
+          <section>
+            <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 class="text-base font-bold">Renewal history</h3>
+                <p class="mt-1 text-xs text-ink-500">
+                  Coverage periods added after the original subscription.
                 </p>
               </div>
-            } @empty {
-              <p class="py-3 text-xs text-ink-500">No renewal history yet.</p>
+              @if (canOperate && subscription.status !== 'CANCELLED') {
+                <button
+                  type="button"
+                  class="primary-button"
+                  (click)="action(subscription, 'renew')"
+                >
+                  <svg lucideRefreshCw class="size-4"></svg>Renew subscription
+                </button>
+              }
+            </div>
+            @if (renewalHistoryLoading()) {
+              <div class="loading-line"></div>
+            } @else if (renewalHistoryError()) {
+              <div class="border-y border-danger-200 bg-danger-100 p-4 text-sm text-danger-700">
+                <p>{{ renewalHistoryError() }}</p>
+                <button type="button" class="mt-2 font-bold underline" (click)="retryRenewals()">
+                  Try again
+                </button>
+              </div>
+            } @else {
+              <div class="divide-y divide-champagne-200 border-y border-champagne-200">
+                @for (renewal of visibleRenewals; track renewal.id) {
+                  <div class="flex items-center justify-between gap-4 py-3 text-sm">
+                    <div>
+                      <p class="font-semibold">
+                        {{ date(renewal.periodStartsAt) }} – {{ date(renewal.periodEndsAt) }}
+                      </p>
+                      <p class="mt-1 text-xs text-ink-500">
+                        Renewed {{ date(renewal.createdAt) }} by
+                        {{ renewal.createdBy?.displayName || 'Administrator' }}
+                      </p>
+                      @if (renewal.reason) {
+                        <p class="mt-1 text-xs text-ink-500">{{ renewal.reason }}</p>
+                      }
+                    </div>
+                    <p class="shrink-0 font-bold tabular-nums">
+                      {{ renewal.currency }} {{ renewal.amount }}
+                    </p>
+                  </div>
+                } @empty {
+                  <p class="py-3 text-xs text-ink-500">No renewal history yet.</p>
+                }
+              </div>
+              @if (visibleRenewals.length < renewalHistory().length) {
+                <button
+                  type="button"
+                  class="secondary-button mt-4 w-full"
+                  (click)="showOlderRenewals()"
+                >
+                  Show older renewals
+                </button>
+              }
             }
-          </div>
-        </section>
-        @if (subscription.notes) {
-          <div class="border-t border-champagne-300 pt-4">
-            <p class="text-xs text-ink-600">Notes</p>
-            <p class="mt-1 whitespace-pre-line text-sm">{{ subscription.notes }}</p>
-          </div>
+          </section>
         }
       </div>
       @if (canOperate) {

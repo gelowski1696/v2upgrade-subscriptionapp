@@ -1,5 +1,6 @@
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import {
   LucideBuilding2,
   LucideChevronLeft,
@@ -69,11 +70,15 @@ export class ClientsPage implements OnInit, OnDestroy {
   readonly groupManagerOpen = signal(false);
   readonly selectedClientIds = signal<Set<string>>(new Set());
   readonly total = signal(0);
+  readonly groupTotal = signal(0);
   readonly totalPages = signal(1);
   readonly error = signal('');
   search = '';
   status: ClientStatus | '' = '';
   groupId = '';
+  view: 'clients' | 'groups' = 'clients';
+  groupSearch = '';
+  groupStatus: ClientGroupStatus | '' = '';
   bulkGroupId = '';
   page = 1;
   readonly pageSize = 20;
@@ -87,9 +92,13 @@ export class ClientsPage implements OnInit, OnDestroy {
     private readonly api: ApiService,
     private readonly toasts: ToastService,
     readonly session: SessionStore,
+    private readonly route: ActivatedRoute,
+    private readonly router: Router,
   ) {}
 
   ngOnInit(): void {
+    this.view = this.route.snapshot.queryParamMap.get('view') === 'groups' ? 'groups' : 'clients';
+    this.groupId = this.route.snapshot.queryParamMap.get('groupId') ?? '';
     void this.load();
   }
 
@@ -118,6 +127,7 @@ export class ClientsPage implements OnInit, OnDestroy {
       );
       this.clients.set(result.clients.items);
       this.groups.set(result.groups.items);
+      this.groupTotal.set(result.groups.total);
       this.total.set(result.clients.total);
       this.totalPages.set(result.clients.totalPages);
       this.selectedClientIds.set(new Set());
@@ -145,6 +155,7 @@ export class ClientsPage implements OnInit, OnDestroy {
   selectGroup(groupId: string): void {
     this.groupId = groupId;
     this.page = 1;
+    void this.updateWorkspaceUrl();
     void this.load();
   }
 
@@ -277,6 +288,16 @@ export class ClientsPage implements OnInit, OnDestroy {
   }
 
   openGroupManager(): void {
+    this.setView('groups');
+    this.groupManagerOpen.set(false);
+  }
+
+  setView(view: 'clients' | 'groups'): void {
+    this.view = view;
+    void this.updateWorkspaceUrl();
+  }
+
+  openGroupCreate(): void {
     this.groupEditing = null;
     this.groupForm = this.emptyGroupForm();
     this.groupManagerOpen.set(true);
@@ -290,6 +311,7 @@ export class ClientsPage implements OnInit, OnDestroy {
       description: group.description ?? '',
       status: group.status,
     };
+    this.groupManagerOpen.set(true);
   }
 
   resetGroupForm(): void {
@@ -320,6 +342,7 @@ export class ClientsPage implements OnInit, OnDestroy {
       }
       this.toasts.show(this.groupEditing ? 'Group updated' : 'Group created', 'success');
       this.resetGroupForm();
+      this.groupManagerOpen.set(false);
       await this.load();
     } catch (error) {
       this.toasts.show(
@@ -338,6 +361,38 @@ export class ClientsPage implements OnInit, OnDestroy {
 
   get canManageGroups(): boolean {
     return this.session.hasAnyRole('SUPER_ADMIN', 'ADMIN');
+  }
+
+  get visibleGroups(): ClientGroupRecord[] {
+    const query = this.groupSearch.trim().toLowerCase();
+    return this.groups().filter(
+      (group) =>
+        (!this.groupStatus || group.status === this.groupStatus) &&
+        (!query ||
+          group.name.toLowerCase().includes(query) ||
+          group.code.toLowerCase().includes(query) ||
+          group.description?.toLowerCase().includes(query)),
+    );
+  }
+
+  showGroupClients(group: ClientGroupRecord): void {
+    this.view = 'clients';
+    this.groupId = group.id;
+    this.page = 1;
+    void this.updateWorkspaceUrl();
+    void this.load();
+  }
+
+  private updateWorkspaceUrl(): Promise<boolean> {
+    return this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {
+        view: this.view === 'groups' ? 'groups' : null,
+        groupId: this.view === 'clients' && this.groupId ? this.groupId : null,
+      },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
   private emptyForm(): ClientForm {

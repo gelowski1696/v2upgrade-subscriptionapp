@@ -23,6 +23,8 @@ test('replaces browser confirmations across administration flows', async ({ page
 
   await page.getByRole('link', { name: 'Plans', exact: true }).click();
   await page.getByRole('button', { name: 'Add plan version' }).click();
+  await page.getByRole('button', { name: /Features/ }).click();
+  await expect(page.getByLabel('Search features')).toBeVisible();
   await page.getByRole('button', { name: 'Archive plan' }).click();
   dialog = page.getByRole('alertdialog', { name: 'Archive plan?' });
   await expect(dialog.getByText('Standard', { exact: true })).toBeVisible();
@@ -35,6 +37,10 @@ test('replaces browser confirmations across administration flows', async ({ page
     .getByRole('button', { name: /Demo Store/ })
     .first()
     .click();
+  await page.getByRole('button', { name: /Features/ }).click();
+  await expect(page.getByRole('heading', { name: 'Subscription features' })).toBeVisible();
+  await page.getByRole('button', { name: /Renewals/ }).click();
+  await expect(page.getByRole('heading', { name: 'Renewal history' })).toBeVisible();
   await page.getByRole('button', { name: 'Suspend', exact: true }).click();
   dialog = page.getByRole('alertdialog', { name: 'Suspend subscription?' });
   await expect(dialog.getByText(/POS access will stop/)).toBeVisible();
@@ -91,6 +97,10 @@ async function mockApi(page: Page): Promise<void> {
       await route.fulfill(json(pageOf(client())));
       return;
     }
+    if (path.endsWith('/client-groups') && request.method() === 'GET') {
+      await route.fulfill(json({ items: [], page: 1, pageSize: 100, total: 0, totalPages: 1 }));
+      return;
+    }
     if (/\/clients\/[^/]+$/.test(path) && request.method() === 'PATCH') {
       await route.fulfill(json({ ...client(), status: 'ARCHIVED' }));
       return;
@@ -101,6 +111,10 @@ async function mockApi(page: Page): Promise<void> {
     }
     if (path.endsWith('/subscriptions') && request.method() === 'GET') {
       await route.fulfill(json(pageOf(subscription())));
+      return;
+    }
+    if (/\/subscriptions\/[^/]+\/renewals$/.test(path) && request.method() === 'GET') {
+      await route.fulfill(json([]));
       return;
     }
     if (/\/subscriptions\/[^/]+$/.test(path) && request.method() === 'DELETE') {
@@ -181,6 +195,7 @@ function subscription() {
     planVersion: {
       id: plan().versions[0].id,
       version: 1,
+      features: {},
       plan: { id: plan().id, code: 'STANDARD', name: 'Standard' },
     },
   };

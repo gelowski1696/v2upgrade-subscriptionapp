@@ -25,11 +25,11 @@ import { ToastService } from '../../core/notifications/toast.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog';
 import { DialogFocusDirective } from '../../shared/dialog-focus.directive';
 import {
-  FEATURE_MOD_GROUPS,
-  type FeatureMods,
-  featureModsFrom,
-  webDashboardFrom,
+  FEATURE_GROUPS,
+  type FeatureValues,
+  featureValuesFrom,
 } from '../../core/models/feature-mods';
+import { FeatureEditorComponent } from '../../shared/feature-editor/feature-editor';
 
 interface PlanForm {
   code: string;
@@ -40,12 +40,10 @@ interface PlanForm {
   trialDays: number;
   graceDays: number;
   maxDevices: number;
-  reports: boolean;
-  backups: boolean;
-  multiUser: boolean;
-  webDashboard: boolean;
-  featureMods: FeatureMods;
+  features: FeatureValues;
 }
+
+type PlanEditorTab = 'details' | 'features' | 'review';
 
 @Component({
   selector: 'app-plans',
@@ -61,11 +59,11 @@ interface PlanForm {
     LucideX,
     ConfirmDialogComponent,
     DialogFocusDirective,
+    FeatureEditorComponent,
   ],
   templateUrl: './plans.html',
 })
 export class PlansPage implements OnInit {
-  readonly featureModGroups = FEATURE_MOD_GROUPS;
   readonly plans = signal<PlanRecord[]>([]);
   readonly loading = signal(false);
   readonly saving = signal(false);
@@ -79,6 +77,8 @@ export class PlansPage implements OnInit {
   readonly pageSize = 20;
   versioningPlan: PlanRecord | null = null;
   form: PlanForm = this.emptyForm();
+  editorTab: PlanEditorTab = 'details';
+  baselineFeatures: FeatureValues = featureValuesFrom();
 
   constructor(
     private readonly api: ApiService,
@@ -134,6 +134,8 @@ export class PlansPage implements OnInit {
   openCreate(): void {
     this.versioningPlan = null;
     this.form = this.emptyForm();
+    this.baselineFeatures = featureValuesFrom();
+    this.editorTab = 'details';
     this.editorOpen.set(true);
   }
 
@@ -150,12 +152,10 @@ export class PlansPage implements OnInit {
       trialDays: latest?.trialDays ?? 0,
       graceDays: latest?.graceDays ?? 7,
       maxDevices: latest?.maxDevices ?? 1,
-      reports: Boolean(latest?.features['reports']),
-      backups: Boolean(latest?.features['backups']),
-      multiUser: Boolean(latest?.features['multiUser']),
-      webDashboard: webDashboardFrom(latest?.features),
-      featureMods: featureModsFrom(latest?.features),
+      features: featureValuesFrom(latest?.features),
     };
+    this.baselineFeatures = featureValuesFrom(latest?.features);
+    this.editorTab = 'details';
     this.editorOpen.set(true);
   }
 
@@ -173,13 +173,7 @@ export class PlansPage implements OnInit {
       trialDays: Number(this.form.trialDays),
       graceDays: Number(this.form.graceDays),
       maxDevices: Number(this.form.maxDevices),
-      features: {
-        reports: this.form.reports,
-        backups: this.form.backups,
-        multiUser: this.form.multiUser,
-        webDashboard: this.form.webDashboard,
-        ...this.form.featureMods,
-      },
+      features: this.form.features,
     };
     try {
       if (this.versioningPlan) {
@@ -254,8 +248,49 @@ export class PlansPage implements OnInit {
     );
   }
 
+  featureCount(version?: PlanVersionRecord): number {
+    if (!version) return 0;
+    return Object.values(featureValuesFrom(version.features)).filter(Boolean).length;
+  }
+
   get canManage(): boolean {
     return this.session.hasAnyRole('SUPER_ADMIN', 'ADMIN');
+  }
+
+  setEditorTab(tab: PlanEditorTab): void {
+    this.editorTab = tab;
+  }
+
+  updateFeatures(features: FeatureValues): void {
+    this.form = { ...this.form, features };
+  }
+
+  get enabledFeatureCount(): number {
+    return Object.values(this.form.features).filter(Boolean).length;
+  }
+
+  get changedFeatureLabels(): string[] {
+    return FEATURE_GROUPS.flatMap((group) => group.features)
+      .filter((feature) => this.baselineFeatures[feature.key] !== this.form.features[feature.key])
+      .map((feature) => feature.label);
+  }
+
+  get addedFeatureLabels(): string[] {
+    return FEATURE_GROUPS.flatMap((group) => group.features)
+      .filter(
+        (feature) =>
+          this.baselineFeatures[feature.key] !== true && this.form.features[feature.key] === true,
+      )
+      .map((feature) => feature.label);
+  }
+
+  get removedFeatureLabels(): string[] {
+    return FEATURE_GROUPS.flatMap((group) => group.features)
+      .filter(
+        (feature) =>
+          this.baselineFeatures[feature.key] === true && this.form.features[feature.key] !== true,
+      )
+      .map((feature) => feature.label);
   }
 
   private emptyForm(): PlanForm {
@@ -268,11 +303,12 @@ export class PlansPage implements OnInit {
       trialDays: 0,
       graceDays: 7,
       maxDevices: 1,
-      reports: true,
-      backups: true,
-      multiUser: true,
-      webDashboard: true,
-      featureMods: featureModsFrom(),
+      features: featureValuesFrom({
+        reports: true,
+        backups: true,
+        multiUser: true,
+        webDashboard: true,
+      }),
     };
   }
 }

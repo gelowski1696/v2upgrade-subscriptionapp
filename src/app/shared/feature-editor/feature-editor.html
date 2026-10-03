@@ -1,0 +1,97 @@
+<div class="feature-editor">
+  <div class="feature-toolbar">
+    <label class="search-control">
+      <span class="sr-only">Search features</span>
+      <input [(ngModel)]="search" placeholder="Search features" aria-label="Search features" />
+    </label>
+    <label class="feature-filter">
+      <input type="checkbox" class="size-4 accent-gold-500" [(ngModel)]="enabledOnly" />
+      Enabled only
+    </label>
+    @if (baseline) {
+      <button type="button" class="secondary-button" (click)="resetAll()" [disabled]="disabled">
+        Reset to plan
+      </button>
+    }
+  </div>
+
+  <p class="feature-summary">{{ enabledCount() }} of {{ totalCount() }} features enabled</p>
+
+  <div class="feature-groups">
+    @for (group of groups; track group.label) {
+      @if (visibleFeatures(group).length) {
+        <section class="feature-group">
+          <header class="feature-group-header">
+            <div>
+              <h3>{{ group.label }}</h3>
+              <p>{{ enabledCount(group) }} of {{ totalCount(group) }} enabled</p>
+            </div>
+            @if (!disabled) {
+              <div class="flex gap-1">
+                <button type="button" class="text-button" (click)="setGroup(group, true)">
+                  Enable all
+                </button>
+                <button type="button" class="text-button" (click)="setGroup(group, false)">
+                  Disable all
+                </button>
+              </div>
+            }
+          </header>
+          @if (pendingDisableGroup === group.label) {
+            <div
+              class="mb-2 flex flex-wrap items-center gap-2 border-y border-warning-700/20 bg-warning-100 px-3 py-2 text-xs text-ink-800"
+            >
+              <span class="mr-auto font-semibold"
+                >Disable every editable feature in {{ group.label }}?</span
+              >
+              <button type="button" class="text-button" (click)="cancelDisable()">
+                Keep features
+              </button>
+              <button
+                type="button"
+                class="min-h-9 px-2 font-bold text-danger-700"
+                (click)="confirmDisable(group)"
+              >
+                Disable all
+              </button>
+            </div>
+          }
+          <div class="feature-list">
+            @for (feature of visibleFeatures(group); track feature.key) {
+              <label class="feature-row" [class.feature-row-readonly]="isReadOnly(feature.key)">
+                <span class="min-w-0">
+                  <span class="flex flex-wrap items-center gap-2">
+                    <span class="text-sm font-semibold">{{ feature.label }}</span>
+                    @if (baseline) {
+                      <span
+                        class="feature-source"
+                        [class.feature-source-override]="isOverride(feature.key)"
+                      >
+                        {{ isOverride(feature.key) ? 'Override' : 'Plan default' }}
+                      </span>
+                    }
+                  </span>
+                  @if (feature.description) {
+                    <span class="mt-1 block text-xs leading-5 text-ink-500">{{
+                      feature.description
+                    }}</span>
+                  }
+                </span>
+                <input
+                  type="checkbox"
+                  class="size-5 shrink-0 accent-gold-500"
+                  [checked]="values[feature.key] === true"
+                  [disabled]="isReadOnly(feature.key)"
+                  (change)="toggle(feature.key, $any($event.target).checked)"
+                />
+              </label>
+            }
+          </div>
+        </section>
+      }
+    }
+    @if (search && !enabledCount() && enabledOnly) {
+      <p class="empty-state min-h-32">No enabled features match your search.</p>
+    }
+  </div>
+</div>

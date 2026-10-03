@@ -64,7 +64,12 @@
   @if (loading()) {
     <div class="loading-line"></div>
   }
-  <section class="data-list">
+  <div
+    class="hidden grid-cols-[minmax(15rem,1.5fr)_minmax(10rem,1fr)_minmax(9rem,0.8fr)_auto] gap-3 border-y border-champagne-300 bg-champagne-200/60 px-5 py-2 text-[11px] font-bold uppercase text-ink-500 lg:grid"
+  >
+    <span>Plan</span><span>Price</span><span>Billing</span><span class="text-right">Actions</span>
+  </div>
+  <section class="data-list lg:rounded-t-none lg:border-t-0">
     @for (plan of plans(); track plan.id) {
       <article
         class="data-row grid-cols-[1fr_auto] lg:grid-cols-[minmax(15rem,1.5fr)_minmax(10rem,1fr)_minmax(9rem,0.8fr)_auto]"
@@ -93,7 +98,8 @@
           </p>
           <p class="mt-1 text-[11px] text-ink-400">
             Version {{ plan.versions[0]?.version || 0 }} ·
-            {{ plan.versions[0]?.maxDevices || 0 }} device limit
+            {{ plan.versions[0]?.maxDevices || 0 }} device limit ·
+            {{ featureCount(plan.versions[0]) }} features
           </p>
         </button>
         <p class="hidden text-sm font-semibold tabular-nums text-ink-800 lg:block">
@@ -167,7 +173,7 @@
   <div class="sheet-backdrop" (click)="closeEditor()">
     <section
       appDialogFocus
-      class="sheet-panel"
+      class="sheet-panel sheet-panel-wide"
       role="dialog"
       aria-modal="true"
       aria-labelledby="plan-editor-title"
@@ -178,182 +184,247 @@
         <div>
           <p class="page-eyebrow">Plan catalog</p>
           <h2 id="plan-editor-title" class="text-xl font-bold">
-            {{ versioningPlan ? 'New plan version' : 'Add plan' }}
+            {{ versioningPlan ? 'Create new version' : 'Create plan' }}
           </h2>
+          @if (versioningPlan) {
+            <p class="mt-1 text-xs text-ink-500">
+              Version {{ (versioningPlan.versions[0]?.version || 0) + 1 }} for
+              {{ versioningPlan.name }}
+            </p>
+          }
         </div>
         <button type="button" class="icon-button" aria-label="Close" (click)="closeEditor()">
           <svg lucideX class="size-5"></svg>
         </button>
       </header>
+      <nav class="editor-tabs" aria-label="Plan editor sections">
+        <button
+          type="button"
+          class="editor-tab"
+          [attr.aria-selected]="editorTab === 'details'"
+          (click)="setEditorTab('details')"
+        >
+          Details
+        </button>
+        <button
+          type="button"
+          class="editor-tab"
+          [attr.aria-selected]="editorTab === 'features'"
+          (click)="setEditorTab('features')"
+        >
+          Features <span class="ml-1 text-xs text-ink-400">{{ enabledFeatureCount }}</span>
+        </button>
+        <button
+          type="button"
+          class="editor-tab"
+          [attr.aria-selected]="editorTab === 'review'"
+          (click)="setEditorTab('review')"
+        >
+          Review
+        </button>
+      </nav>
       <form (ngSubmit)="save()">
         <div class="sheet-body">
-          <div class="grid gap-4 sm:grid-cols-2">
-            <label
-              ><span class="field-label">Plan code *</span
-              ><input
-                name="code"
-                data-dialog-initial-focus
-                class="field-control"
-                [(ngModel)]="form.code"
-                [disabled]="!!versioningPlan"
-                required
-            /></label>
-            <label
-              ><span class="field-label">Plan name *</span
-              ><input
-                name="name"
-                class="field-control"
-                [(ngModel)]="form.name"
-                [disabled]="!!versioningPlan"
-                required
-            /></label>
-          </div>
-          <label
-            ><span class="field-label">Billing interval</span
-            ><select name="interval" class="field-control" [(ngModel)]="form.billingInterval">
-              <option value="MONTHLY">Monthly</option>
-              <option value="QUARTERLY">Quarterly</option>
-              <option value="SEMIANNUAL">Semiannual</option>
-              <option value="ANNUAL">Annual</option>
-              <option value="CUSTOM">Custom</option>
-            </select></label
-          >
-          <div class="grid grid-cols-[1fr_88px] gap-3">
-            <label
-              ><span class="field-label">Amount *</span
-              ><input
-                name="amount"
-                class="field-control"
-                [(ngModel)]="form.amount"
-                inputmode="decimal"
-                placeholder="0.00"
-                required /></label
-            ><label
-              ><span class="field-label">Currency</span
-              ><input
-                name="currency"
-                class="field-control uppercase"
-                [(ngModel)]="form.currency"
-                maxlength="3"
-            /></label>
-          </div>
-          <div class="grid grid-cols-3 gap-3">
-            <label
-              ><span class="field-label">Trial days</span
-              ><input
-                name="trialDays"
-                class="field-control"
-                type="number"
-                min="0"
-                [(ngModel)]="form.trialDays" /></label
-            ><label
-              ><span class="field-label">Grace days</span
-              ><input
-                name="graceDays"
-                class="field-control"
-                type="number"
-                min="0"
-                [(ngModel)]="form.graceDays" /></label
-            ><label
-              ><span class="field-label">Devices</span
-              ><input
-                name="maxDevices"
-                class="field-control"
-                type="number"
-                min="1"
-                [(ngModel)]="form.maxDevices"
-            /></label>
-          </div>
-          <fieldset class="border-t border-champagne-300 pt-4">
-            <legend class="field-label pr-2">Included features</legend>
-            <div class="space-y-1">
-              <label class="flex min-h-11 items-center justify-between"
-                ><span class="text-sm">Owner web dashboard</span
-                ><input
-                  name="webDashboard"
-                  type="checkbox"
-                  class="size-5 accent-gold-500"
-                  [(ngModel)]="form.webDashboard"
-              /></label>
-              <label class="flex min-h-11 items-center justify-between"
-                ><span class="text-sm">Reports</span
-                ><input
-                  name="reports"
-                  type="checkbox"
-                  class="size-5 accent-gold-500"
-                  [(ngModel)]="form.reports"
-              /></label>
-              <label class="flex min-h-11 items-center justify-between"
-                ><span class="text-sm">Database backups</span
-                ><input
-                  name="backups"
-                  type="checkbox"
-                  class="size-5 accent-gold-500"
-                  [(ngModel)]="form.backups"
-              /></label>
-              <label class="flex min-h-11 items-center justify-between"
-                ><span class="text-sm">Multiple users</span
-                ><input
-                  name="multiUser"
-                  type="checkbox"
-                  class="size-5 accent-gold-500"
-                  [(ngModel)]="form.multiUser"
-              /></label>
-            </div>
-          </fieldset>
-          <fieldset class="border-t border-champagne-300 pt-4">
-            <legend class="field-label pr-2">POS and web dashboard feature mods</legend>
-            <p class="mb-4 text-xs leading-5 text-ink-500">
-              These defaults are copied to each new subscription. Existing subscriptions keep their
-              current switches until edited from Subscriptions.
-            </p>
-            <div class="space-y-5">
-              @for (group of featureModGroups; track group.label) {
-                <section>
-                  <h3 class="mb-1 text-xs font-bold uppercase tracking-wide text-ink-600">
-                    {{ group.label }}
-                  </h3>
-                  <div class="divide-y divide-champagne-200">
-                    @for (feature of group.features; track feature[0]) {
-                      <label class="flex min-h-11 items-center justify-between gap-4">
-                        <span class="text-sm">{{ feature[1] }}</span>
-                        <input
-                          [name]="'feature-' + feature[0]"
-                          type="checkbox"
-                          class="size-5 shrink-0 accent-gold-500"
-                          [(ngModel)]="form.featureMods[feature[0]]"
-                        />
-                      </label>
-                    }
-                  </div>
-                </section>
+          @if (editorTab === 'details') {
+            <section class="mx-auto max-w-2xl space-y-4">
+              <div>
+                <h3 class="text-base font-bold">Plan details</h3>
+                <p class="mt-1 text-sm text-ink-500">Set pricing, billing, and access limits.</p>
+              </div>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <label
+                  ><span class="field-label">Plan code *</span
+                  ><input
+                    name="code"
+                    data-dialog-initial-focus
+                    class="field-control uppercase"
+                    [(ngModel)]="form.code"
+                    [disabled]="!!versioningPlan"
+                    required
+                /></label>
+                <label
+                  ><span class="field-label">Plan name *</span
+                  ><input
+                    name="name"
+                    class="field-control"
+                    [(ngModel)]="form.name"
+                    [disabled]="!!versioningPlan"
+                    required
+                /></label>
+              </div>
+              <label
+                ><span class="field-label">Billing interval</span
+                ><select name="interval" class="field-control" [(ngModel)]="form.billingInterval">
+                  <option value="MONTHLY">Monthly</option>
+                  <option value="QUARTERLY">Quarterly</option>
+                  <option value="SEMIANNUAL">Semiannual</option>
+                  <option value="ANNUAL">Annual</option>
+                  <option value="CUSTOM">Custom</option>
+                </select></label
+              >
+              <div class="grid grid-cols-[1fr_7rem] gap-3">
+                <label
+                  ><span class="field-label">Amount *</span
+                  ><input
+                    name="amount"
+                    class="field-control"
+                    [(ngModel)]="form.amount"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                    required
+                /></label>
+                <label
+                  ><span class="field-label">Currency</span
+                  ><input
+                    name="currency"
+                    class="field-control uppercase"
+                    [(ngModel)]="form.currency"
+                    maxlength="3"
+                /></label>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-3">
+                <label
+                  ><span class="field-label">Trial days</span
+                  ><input
+                    name="trialDays"
+                    class="field-control"
+                    type="number"
+                    min="0"
+                    [(ngModel)]="form.trialDays"
+                /></label>
+                <label
+                  ><span class="field-label">Grace days</span
+                  ><input
+                    name="graceDays"
+                    class="field-control"
+                    type="number"
+                    min="0"
+                    [(ngModel)]="form.graceDays"
+                /></label>
+                <label
+                  ><span class="field-label">Device limit</span
+                  ><input
+                    name="maxDevices"
+                    class="field-control"
+                    type="number"
+                    min="1"
+                    [(ngModel)]="form.maxDevices"
+                /></label>
+              </div>
+            </section>
+          } @else if (editorTab === 'features') {
+            <section>
+              <div class="mb-5">
+                <h3 class="text-base font-bold">Included features</h3>
+                <p class="mt-1 text-sm text-ink-500">
+                  These settings are copied to new subscriptions. Existing subscriptions keep their
+                  current access.
+                </p>
+              </div>
+              <app-feature-editor
+                [values]="form.features"
+                [baseline]="versioningPlan ? baselineFeatures : null"
+                (valuesChange)="updateFeatures($event)"
+              />
+            </section>
+          } @else {
+            <section class="mx-auto max-w-2xl space-y-6">
+              <div>
+                <h3 class="text-base font-bold">Review plan</h3>
+                <p class="mt-1 text-sm text-ink-500">
+                  Confirm the commercial terms and feature access before saving.
+                </p>
+              </div>
+              <dl class="grid gap-4 border-y border-champagne-300 py-5 sm:grid-cols-2">
+                <div>
+                  <dt class="text-xs text-ink-500">Plan</dt>
+                  <dd class="mt-1 font-bold">{{ form.name || 'Unnamed plan' }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-ink-500">Price</dt>
+                  <dd class="mt-1 font-bold tabular-nums">
+                    {{ form.currency }} {{ form.amount || '0.00' }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-ink-500">Billing</dt>
+                  <dd class="mt-1 font-semibold capitalize">
+                    {{ form.billingInterval.toLowerCase() }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-ink-500">Features</dt>
+                  <dd class="mt-1 font-semibold">{{ enabledFeatureCount }} enabled</dd>
+                </div>
+              </dl>
+              @if (versioningPlan) {
+                <div>
+                  <h4 class="text-sm font-bold">Feature changes</h4>
+                  @if (changedFeatureLabels.length) {
+                    <div class="mt-3 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <p class="text-xs font-bold uppercase text-success-700">Added</p>
+                        @if (addedFeatureLabels.length) {
+                          <ul
+                            class="mt-1 divide-y divide-champagne-200 border-y border-champagne-200 text-sm"
+                          >
+                            @for (label of addedFeatureLabels; track label) {
+                              <li class="py-2">{{ label }}</li>
+                            }
+                          </ul>
+                        } @else {
+                          <p class="mt-2 text-sm text-ink-500">None</p>
+                        }
+                      </div>
+                      <div>
+                        <p class="text-xs font-bold uppercase text-danger-700">Removed</p>
+                        @if (removedFeatureLabels.length) {
+                          <ul
+                            class="mt-1 divide-y divide-champagne-200 border-y border-champagne-200 text-sm"
+                          >
+                            @for (label of removedFeatureLabels; track label) {
+                              <li class="py-2">{{ label }}</li>
+                            }
+                          </ul>
+                        } @else {
+                          <p class="mt-2 text-sm text-ink-500">None</p>
+                        }
+                      </div>
+                    </div>
+                  } @else {
+                    <p class="mt-2 text-sm text-ink-500">No feature access changes.</p>
+                  }
+                  <p class="mt-3 text-xs leading-5 text-ink-500">
+                    Existing subscriptions remain on their current plan version.
+                  </p>
+                </div>
               }
-            </div>
-          </fieldset>
-          @if (versioningPlan && versioningPlan.status !== 'ARCHIVED') {
-            <button
-              type="button"
-              class="flex min-h-11 items-center gap-2 text-sm font-semibold text-danger-700"
-              (click)="archive(versioningPlan)"
-            >
-              <svg lucideArchive class="size-4"></svg>Archive plan
-            </button>
+            </section>
           }
         </div>
         <footer class="sheet-footer">
+          @if (versioningPlan && versioningPlan.status !== 'ARCHIVED') {
+            <button
+              type="button"
+              class="mr-auto min-h-11 text-sm font-semibold text-danger-700"
+              (click)="archive(versioningPlan)"
+            >
+              <svg lucideArchive class="mr-2 inline size-4"></svg>Archive plan
+            </button>
+          }
           <button
             type="button"
-            class="secondary-button flex-1"
+            class="secondary-button"
             [disabled]="saving()"
             (click)="closeEditor()"
           >
             Cancel</button
           ><button
             type="submit"
-            class="primary-button flex-1"
+            class="primary-button"
             [disabled]="saving() || !form.code.trim() || !form.name.trim() || !form.amount"
           >
-            {{ saving() ? 'Saving' : versioningPlan ? 'Add version' : 'Create plan' }}
+            {{ saving() ? 'Saving' : versioningPlan ? 'Create version' : 'Create plan' }}
           </button>
         </footer>
       </form>

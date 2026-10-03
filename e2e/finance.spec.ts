@@ -10,7 +10,7 @@ test('manages subscription finance with safe confirmations', async ({ page }, te
   await expect(page.getByText('₱1,200.00', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('₱3,300.00', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Revenue versus expenses' })).toBeVisible();
-  await expect(page.getByText('Standard', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Initial payment', { exact: true }).first()).toBeVisible();
 
   const overviewTab = page.getByRole('tab', { name: 'Overview' });
   const paymentsTab = page.getByRole('tab', { name: 'Payments' });
@@ -97,6 +97,18 @@ async function mockApi(page: Page): Promise<void> {
       await route.fulfill(json(financeOverview()));
       return;
     }
+    if (path.endsWith('/finance/payments') && request.method() === 'GET') {
+      await route.fulfill(
+        json({
+          items: financeOverview().recentPayments,
+          page: 1,
+          pageSize: 100,
+          total: 1,
+          totalPages: 1,
+        }),
+      );
+      return;
+    }
     if (path.endsWith('/finance/expenses') && request.method() === 'GET') {
       await route.fulfill(
         json({ items: [expense()], page: 1, pageSize: 100, total: 1, totalPages: 1 }),
@@ -132,6 +144,10 @@ async function mockApi(page: Page): Promise<void> {
       await route.fulfill(json({ items: [], page: 1, pageSize: 5, total: 0, totalPages: 1 }));
       return;
     }
+    if (path.endsWith('/client-groups')) {
+      await route.fulfill(json({ items: [], page: 1, pageSize: 100, total: 0, totalPages: 1 }));
+      return;
+    }
     await route.fulfill(json({ message: 'Not found' }, 404));
   });
 }
@@ -152,10 +168,14 @@ function financeOverview() {
       { day: '2026-09-30', revenue: 1500, expenses: 0, netIncome: 1500 },
     ],
     byPlan: [{ planId: 'plan-1', planName: 'Standard', revenue: 4500, payments: 3 }],
+    byPurpose: [{ purpose: 'INITIAL', revenue: 4500, payments: 3 }],
     recentPayments: [
       {
         id: 'payment-1',
         subscriptionId: 'subscription-1',
+        renewalId: null,
+        purpose: 'INITIAL',
+        description: null,
         amount: '1500.00',
         currency: 'PHP',
         reference: 'RECEIPT-1',
@@ -164,8 +184,9 @@ function financeOverview() {
         status: 'POSTED',
         voidedAt: null,
         voidReason: null,
-        client: { id: 'client-1', businessName: 'Demo Store' },
+        client: { id: 'client-1', businessName: 'Demo Store', group: null },
         plan: { id: 'plan-1', name: 'Standard' },
+        renewal: null,
       },
     ],
   };

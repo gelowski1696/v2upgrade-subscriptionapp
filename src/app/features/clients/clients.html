@@ -3,15 +3,14 @@
     <div>
       <p class="page-eyebrow">Accounts</p>
       <h1 class="page-title">Clients</h1>
-      <p class="page-subtitle">{{ total() }} registered businesses</p>
+      <p class="page-subtitle">
+        {{
+          view === 'clients' ? total() + ' registered businesses' : groupTotal() + ' client groups'
+        }}
+      </p>
     </div>
     <div class="flex gap-2">
-      @if (canManageGroups) {
-        <button type="button" class="secondary-button shrink-0" (click)="openGroupManager()">
-          Manage groups
-        </button>
-      }
-      @if (canEdit) {
+      @if (view === 'clients' && canEdit) {
         <button
           type="button"
           class="primary-button shrink-0"
@@ -20,190 +19,299 @@
         >
           <svg lucidePlus class="size-4"></svg><span class="hidden sm:inline">Add client</span>
         </button>
+      } @else if (view === 'groups' && canManageGroups) {
+        <button type="button" class="primary-button shrink-0" (click)="openGroupCreate()">
+          <svg lucidePlus class="size-4"></svg><span class="hidden sm:inline">Add group</span>
+        </button>
       }
     </div>
   </header>
 
-  <div class="mb-3 flex flex-col gap-2 sm:flex-row">
-    <label class="search-control">
-      <svg lucideSearch class="size-5 shrink-0 text-ink-400"></svg>
-      <input
-        [(ngModel)]="search"
-        (ngModelChange)="searchChanged()"
-        placeholder="Search clients"
-        aria-label="Search clients"
-      />
-      @if (search) {
-        <button
-          type="button"
-          class="-mr-2 flex size-9 items-center justify-center text-ink-400"
-          aria-label="Clear search"
-          (click)="search = ''; searchChanged()"
-        >
-          <svg lucideX class="size-4"></svg>
-        </button>
-      }
-    </label>
-    <select
-      class="field-control sm:max-w-56"
-      aria-label="Filter clients by group"
-      [(ngModel)]="groupId"
-      (ngModelChange)="selectGroup($event)"
+  <nav class="workspace-tabs" aria-label="Client workspace">
+    <button
+      type="button"
+      class="workspace-tab"
+      [attr.aria-selected]="view === 'clients'"
+      (click)="setView('clients')"
     >
-      <option value="">All groups</option>
-      <option value="ungrouped">Ungrouped</option>
-      @for (group of groups(); track group.id) {
-        <option [value]="group.id">{{ group.name }}</option>
-      }
-    </select>
-  </div>
-
-  <div class="mb-4 flex gap-2 overflow-x-auto pb-1">
-    @for (
-      option of [
-        { value: '', label: 'All' },
-        { value: 'ACTIVE', label: 'Active' },
-        { value: 'INACTIVE', label: 'Inactive' },
-        { value: 'ARCHIVED', label: 'Archived' },
-      ];
-      track option.value
-    ) {
-      <button
-        type="button"
-        class="min-h-10 shrink-0 rounded-full border px-4 text-xs font-semibold"
-        [class.border-gold-500]="status === option.value"
-        [class.bg-gold-500]="status === option.value"
-        [class.border-champagne-300]="status !== option.value"
-        [class.bg-white]="status !== option.value"
-        (click)="selectStatus($any(option.value))"
-      >
-        {{ option.label }}
-      </button>
-    }
-  </div>
-
-  @if (loading()) {
-    <div class="loading-line"></div>
-  }
-  @if (error()) {
-    <p class="mb-3 bg-danger-100 p-3 text-sm text-danger-700">{{ error() }}</p>
-  }
-
-  @if (canEdit && selectedClientIds().size) {
-    <div
-      class="mb-3 flex flex-wrap items-center gap-2 border-y border-champagne-300 bg-white px-3 py-2 sm:rounded-md sm:border"
+      Clients
+    </button>
+    <button
+      type="button"
+      class="workspace-tab"
+      [attr.aria-selected]="view === 'groups'"
+      (click)="openGroupManager()"
     >
-      <p class="mr-auto text-xs font-semibold text-ink-600">
-        {{ selectedClientIds().size }} selected
-      </p>
-      <select class="field-control min-w-44 sm:max-w-56" [(ngModel)]="bulkGroupId">
-        <option value="">Move to Ungrouped</option>
-        @for (group of groups(); track group.id) {
-          @if (group.status === 'ACTIVE') {
-            <option [value]="group.id">{{ group.name }}</option>
-          }
-        }
-      </select>
-      <button
-        type="button"
-        class="primary-button"
-        [disabled]="saving()"
-        (click)="assignSelectedGroup()"
-      >
-        Assign group
-      </button>
-    </div>
-  }
+      Groups <span class="ml-1 text-xs text-ink-400">{{ groupTotal() }}</span>
+    </button>
+  </nav>
 
-  <section class="data-list">
-    @for (client of clients(); track client.id) {
-      <article
-        class="data-row grid-cols-[auto_1fr_auto] lg:grid-cols-[auto_minmax(15rem,1.5fr)_minmax(9rem,0.8fr)_minmax(10rem,1fr)_minmax(11rem,1fr)_auto]"
-      >
-        @if (canEdit) {
-          <input
-            type="checkbox"
-            class="size-5 accent-gold-500"
-            [checked]="selectedClientIds().has(client.id)"
-            [attr.aria-label]="'Select ' + client.businessName"
-            (change)="toggleClient(client.id, $any($event.target).checked)"
-          />
-        } @else {
-          <span></span>
-        }
-        <button
-          type="button"
-          class="min-w-0 text-left disabled:cursor-default"
-          [disabled]="!canEdit"
-          (click)="openEdit(client)"
-        >
-          <div class="flex items-center gap-2">
-            <p class="truncate text-sm font-bold">{{ client.businessName }}</p>
-            <span class="status-chip" [class]="statusClass(client.status)">{{
-              client.status
-            }}</span>
-          </div>
-          <p class="mt-1 truncate text-xs text-ink-600">
-            {{ client.code }} · {{ client.ownerName || client.phone || 'No contact details' }}
-          </p>
-        </button>
-        <p class="hidden truncate text-sm font-semibold text-ink-600 lg:block">
-          {{ client.group?.name || 'Ungrouped' }}
-        </p>
-        <p class="hidden truncate text-sm text-ink-600 lg:block">
-          {{ client.ownerName || 'No contact name' }}
-        </p>
-        <div class="hidden min-w-0 text-sm text-ink-600 lg:block">
-          <p class="truncate">{{ client.email || 'No email' }}</p>
-          <p class="mt-1 truncate text-xs text-ink-400">{{ client.phone || 'No phone' }}</p>
-        </div>
-        @if (canEdit) {
+  @if (view === 'clients') {
+    <div class="mb-3 flex flex-col gap-2 sm:flex-row">
+      <label class="search-control">
+        <svg lucideSearch class="size-5 shrink-0 text-ink-400"></svg>
+        <input
+          [(ngModel)]="search"
+          (ngModelChange)="searchChanged()"
+          placeholder="Search clients"
+          aria-label="Search clients"
+        />
+        @if (search) {
           <button
             type="button"
-            class="icon-button"
-            aria-label="Edit client"
-            (click)="openEdit(client)"
+            class="-mr-2 flex size-9 items-center justify-center text-ink-400"
+            aria-label="Clear search"
+            (click)="search = ''; searchChanged()"
           >
-            <svg lucidePencil class="size-4"></svg>
+            <svg lucideX class="size-4"></svg>
           </button>
         }
-      </article>
-    } @empty {
-      @if (!loading()) {
-        <div class="empty-state">
-          <svg lucideBuilding2 class="mb-3 size-8 text-ink-400"></svg>
-          <p class="text-sm font-semibold">No clients found</p>
-        </div>
-      }
-    }
-  </section>
+      </label>
+      <select
+        class="field-control sm:max-w-56"
+        aria-label="Filter clients by group"
+        [(ngModel)]="groupId"
+        (ngModelChange)="selectGroup($event)"
+      >
+        <option value="">All groups</option>
+        <option value="ungrouped">Ungrouped</option>
+        @for (group of groups(); track group.id) {
+          <option [value]="group.id">{{ group.name }}</option>
+        }
+      </select>
+    </div>
 
-  @if (totalPages() > 1) {
-    <footer class="mt-4 flex items-center justify-center gap-2">
-      <button
-        type="button"
-        class="icon-button"
-        aria-label="Previous page"
-        [disabled]="page === 1"
-        (click)="goToPage(page - 1)"
+    <div class="mb-4 flex gap-2 overflow-x-auto pb-1">
+      @for (
+        option of [
+          { value: '', label: 'All' },
+          { value: 'ACTIVE', label: 'Active' },
+          { value: 'INACTIVE', label: 'Inactive' },
+          { value: 'ARCHIVED', label: 'Archived' },
+        ];
+        track option.value
+      ) {
+        <button
+          type="button"
+          class="min-h-10 shrink-0 rounded-full border px-4 text-xs font-semibold"
+          [class.border-gold-500]="status === option.value"
+          [class.bg-gold-500]="status === option.value"
+          [class.border-champagne-300]="status !== option.value"
+          [class.bg-white]="status !== option.value"
+          (click)="selectStatus($any(option.value))"
+        >
+          {{ option.label }}
+        </button>
+      }
+    </div>
+
+    @if (loading()) {
+      <div class="loading-line"></div>
+    }
+    @if (error()) {
+      <p class="mb-3 bg-danger-100 p-3 text-sm text-danger-700">{{ error() }}</p>
+    }
+
+    @if (canEdit && selectedClientIds().size) {
+      <div
+        class="mb-3 flex flex-wrap items-center gap-2 border-y border-champagne-300 bg-white px-3 py-2 sm:rounded-md sm:border"
       >
-        <svg lucideChevronLeft class="size-4"></svg>
-      </button>
-      <span
-        class="flex h-11 min-w-11 items-center justify-center rounded-md bg-gold-500 px-3 text-sm font-bold tabular-nums"
-        >{{ page }}</span
+        <p class="mr-auto text-xs font-semibold text-ink-600">
+          {{ selectedClientIds().size }} selected
+        </p>
+        <select class="field-control min-w-44 sm:max-w-56" [(ngModel)]="bulkGroupId">
+          <option value="">Move to Ungrouped</option>
+          @for (group of groups(); track group.id) {
+            @if (group.status === 'ACTIVE') {
+              <option [value]="group.id">{{ group.name }}</option>
+            }
+          }
+        </select>
+        <button
+          type="button"
+          class="primary-button"
+          [disabled]="saving()"
+          (click)="assignSelectedGroup()"
+        >
+          Assign group
+        </button>
+      </div>
+    }
+
+    <div
+      class="hidden grid-cols-[auto_minmax(15rem,1.5fr)_minmax(9rem,0.8fr)_minmax(10rem,1fr)_minmax(11rem,1fr)_auto] gap-3 border-y border-champagne-300 bg-champagne-200/60 px-5 py-2 text-[11px] font-bold uppercase text-ink-500 lg:grid"
+    >
+      <span class="w-5"></span><span>Client</span><span>Group</span><span>Contact</span
+      ><span>Email and phone</span><span>Action</span>
+    </div>
+    <section class="data-list lg:rounded-t-none lg:border-t-0">
+      @for (client of clients(); track client.id) {
+        <article
+          class="data-row grid-cols-[auto_1fr_auto] lg:grid-cols-[auto_minmax(15rem,1.5fr)_minmax(9rem,0.8fr)_minmax(10rem,1fr)_minmax(11rem,1fr)_auto]"
+        >
+          @if (canEdit) {
+            <input
+              type="checkbox"
+              class="size-5 accent-gold-500"
+              [checked]="selectedClientIds().has(client.id)"
+              [attr.aria-label]="'Select ' + client.businessName"
+              (change)="toggleClient(client.id, $any($event.target).checked)"
+            />
+          } @else {
+            <span></span>
+          }
+          <button
+            type="button"
+            class="min-w-0 text-left disabled:cursor-default"
+            [disabled]="!canEdit"
+            (click)="openEdit(client)"
+          >
+            <div class="flex items-center gap-2">
+              <p class="truncate text-sm font-bold">{{ client.businessName }}</p>
+              <span class="status-chip" [class]="statusClass(client.status)">{{
+                client.status
+              }}</span>
+            </div>
+            <p class="mt-1 truncate text-xs text-ink-600">
+              {{ client.code }} · {{ client.ownerName || client.phone || 'No contact details' }}
+            </p>
+          </button>
+          <p class="hidden truncate text-sm font-semibold text-ink-600 lg:block">
+            {{ client.group?.name || 'Ungrouped' }}
+          </p>
+          <p class="hidden truncate text-sm text-ink-600 lg:block">
+            {{ client.ownerName || 'No contact name' }}
+          </p>
+          <div class="hidden min-w-0 text-sm text-ink-600 lg:block">
+            <p class="truncate">{{ client.email || 'No email' }}</p>
+            <p class="mt-1 truncate text-xs text-ink-400">{{ client.phone || 'No phone' }}</p>
+          </div>
+          @if (canEdit) {
+            <button
+              type="button"
+              class="icon-button"
+              aria-label="Edit client"
+              (click)="openEdit(client)"
+            >
+              <svg lucidePencil class="size-4"></svg>
+            </button>
+          }
+        </article>
+      } @empty {
+        @if (!loading()) {
+          <div class="empty-state">
+            <svg lucideBuilding2 class="mb-3 size-8 text-ink-400"></svg>
+            <p class="text-sm font-semibold">No clients found</p>
+          </div>
+        }
+      }
+    </section>
+
+    @if (totalPages() > 1) {
+      <footer class="mt-4 flex items-center justify-center gap-2">
+        <button
+          type="button"
+          class="icon-button"
+          aria-label="Previous page"
+          [disabled]="page === 1"
+          (click)="goToPage(page - 1)"
+        >
+          <svg lucideChevronLeft class="size-4"></svg>
+        </button>
+        <span
+          class="flex h-11 min-w-11 items-center justify-center rounded-md bg-gold-500 px-3 text-sm font-bold tabular-nums"
+          >{{ page }}</span
+        >
+        <span class="text-xs text-ink-600">of {{ totalPages() }}</span>
+        <button
+          type="button"
+          class="icon-button"
+          aria-label="Next page"
+          [disabled]="page === totalPages()"
+          (click)="goToPage(page + 1)"
+        >
+          <svg lucideChevronRight class="size-4"></svg>
+        </button>
+      </footer>
+    }
+  } @else {
+    <section>
+      <div class="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_14rem]">
+        <label class="search-control">
+          <svg lucideSearch class="size-5 shrink-0 text-ink-400"></svg>
+          <input [(ngModel)]="groupSearch" placeholder="Search groups" aria-label="Search groups" />
+          @if (groupSearch) {
+            <button
+              type="button"
+              class="-mr-2 flex size-9 items-center justify-center text-ink-400"
+              aria-label="Clear group search"
+              (click)="groupSearch = ''"
+            >
+              <svg lucideX class="size-4"></svg>
+            </button>
+          }
+        </label>
+        <select
+          class="field-control"
+          [(ngModel)]="groupStatus"
+          aria-label="Filter groups by status"
+        >
+          <option value="">All statuses</option>
+          <option value="ACTIVE">Active</option>
+          <option value="ARCHIVED">Archived</option>
+        </select>
+      </div>
+
+      <div
+        class="hidden grid-cols-[minmax(13rem,1.5fr)_minmax(8rem,0.7fr)_7rem_8rem_6rem] gap-3 border-y border-champagne-300 bg-champagne-200/60 px-5 py-2 text-[11px] font-bold uppercase text-ink-500 lg:grid"
       >
-      <span class="text-xs text-ink-600">of {{ totalPages() }}</span>
-      <button
-        type="button"
-        class="icon-button"
-        aria-label="Next page"
-        [disabled]="page === totalPages()"
-        (click)="goToPage(page + 1)"
-      >
-        <svg lucideChevronRight class="size-4"></svg>
-      </button>
-    </footer>
+        <span>Group</span><span>Code</span><span>Clients</span><span>Status</span
+        ><span class="text-right">Action</span>
+      </div>
+      <div class="data-list lg:rounded-t-none lg:border-t-0">
+        @for (group of visibleGroups; track group.id) {
+          <article
+            class="data-row grid-cols-[1fr_auto] lg:grid-cols-[minmax(13rem,1.5fr)_minmax(8rem,0.7fr)_7rem_8rem_6rem]"
+            [class.opacity-60]="group.status === 'ARCHIVED'"
+          >
+            <div class="min-w-0">
+              <p class="truncate text-sm font-bold">{{ group.name }}</p>
+              <p class="mt-1 truncate text-xs text-ink-500">
+                {{ group.description || 'No description' }}
+              </p>
+            </div>
+            <p class="hidden text-sm font-semibold text-ink-600 lg:block">{{ group.code }}</p>
+            <button
+              type="button"
+              class="hidden text-left text-sm font-bold text-gold-800 hover:underline lg:block"
+              (click)="showGroupClients(group)"
+            >
+              {{ group.clientCount }}
+            </button>
+            <span
+              class="status-chip"
+              [class]="
+                group.status === 'ACTIVE'
+                  ? 'bg-success-100 text-success-700'
+                  : 'bg-champagne-200 text-ink-600'
+              "
+              >{{ group.status }}</span
+            >
+            @if (canManageGroups) {
+              <button type="button" class="text-button justify-self-end" (click)="editGroup(group)">
+                Edit
+              </button>
+            }
+          </article>
+        } @empty {
+          <div class="empty-state">
+            <svg lucideBuilding2 class="mb-3 size-8 text-ink-400"></svg>
+            <p class="text-sm font-semibold">No groups found</p>
+            <p class="mt-1 text-xs">Change the filters or add a group.</p>
+          </div>
+        }
+      </div>
+    </section>
   }
 </div>
 
@@ -211,7 +319,7 @@
   <div class="sheet-backdrop" (click)="closeEditor()">
     <section
       appDialogFocus
-      class="sheet-panel"
+      class="sheet-panel sheet-panel-inspector"
       role="dialog"
       aria-modal="true"
       aria-labelledby="client-editor-title"
@@ -343,7 +451,7 @@
   <div class="sheet-backdrop" (click)="groupManagerOpen.set(false)">
     <section
       appDialogFocus
-      class="sheet-panel"
+      class="sheet-panel sheet-panel-inspector"
       role="dialog"
       aria-modal="true"
       aria-labelledby="group-manager-title"
@@ -352,8 +460,10 @@
     >
       <header class="sheet-header">
         <div>
-          <p class="page-eyebrow">Client organization</p>
-          <h2 id="group-manager-title" class="text-xl font-bold">Manage groups</h2>
+          <p class="page-eyebrow">Client group</p>
+          <h2 id="group-manager-title" class="text-xl font-bold">
+            {{ groupEditing ? 'Edit group' : 'Add group' }}
+          </h2>
         </div>
         <button
           type="button"
@@ -366,107 +476,69 @@
       </header>
       <form (ngSubmit)="saveGroup()">
         <div class="sheet-body">
-          <div class="border-b border-champagne-300 pb-5">
-            <div class="grid gap-4 sm:grid-cols-2">
-              <label>
-                <span class="field-label">Group code *</span>
-                <input
-                  data-dialog-initial-focus
-                  name="groupCode"
-                  class="field-control uppercase"
-                  maxlength="40"
-                  [(ngModel)]="groupForm.code"
-                  [disabled]="!!groupEditing"
-                  required
-                />
-              </label>
-              <label>
-                <span class="field-label">Status</span>
-                <select
-                  name="groupStatus"
-                  class="field-control"
-                  [(ngModel)]="groupForm.status"
-                  [disabled]="!groupEditing"
-                >
-                  <option value="ACTIVE">Active</option>
-                  <option value="ARCHIVED">Archived</option>
-                </select>
-              </label>
-            </div>
+          <label>
+            <span class="field-label">Group name *</span>
+            <input
+              data-dialog-initial-focus
+              name="groupName"
+              class="field-control"
+              maxlength="120"
+              [(ngModel)]="groupForm.name"
+              required
+            />
+          </label>
+          <div class="grid gap-4 sm:grid-cols-2">
             <label>
-              <span class="field-label">Group name *</span>
+              <span class="field-label">Group code *</span>
               <input
-                name="groupName"
-                class="field-control"
-                maxlength="120"
-                [(ngModel)]="groupForm.name"
+                name="groupCode"
+                class="field-control uppercase"
+                maxlength="40"
+                [(ngModel)]="groupForm.code"
+                [disabled]="!!groupEditing"
                 required
               />
             </label>
             <label>
-              <span class="field-label">Description</span>
-              <textarea
-                name="groupDescription"
-                class="field-control min-h-20 py-3"
-                maxlength="500"
-                [(ngModel)]="groupForm.description"
-              ></textarea>
+              <span class="field-label">Status</span>
+              <select
+                name="groupStatus"
+                class="field-control"
+                [(ngModel)]="groupForm.status"
+                [disabled]="!groupEditing"
+              >
+                <option value="ACTIVE">Active</option>
+                <option value="ARCHIVED">Archived</option>
+              </select>
             </label>
-            <div class="mt-4 flex justify-end gap-2">
-              @if (groupEditing) {
-                <button
-                  type="button"
-                  class="secondary-button"
-                  [disabled]="saving()"
-                  (click)="resetGroupForm()"
-                >
-                  Cancel edit
-                </button>
-              }
-              <button
-                type="submit"
-                class="primary-button"
-                [disabled]="saving() || !groupForm.code.trim() || !groupForm.name.trim()"
-              >
-                {{ saving() ? 'Saving' : groupEditing ? 'Save group' : 'Create group' }}
-              </button>
-            </div>
           </div>
-
-          <div class="data-list">
-            @for (group of groups(); track group.id) {
-              <button
-                type="button"
-                class="data-row grid-cols-[1fr_auto] text-left"
-                [class.opacity-60]="group.status === 'ARCHIVED'"
-                (click)="editGroup(group)"
-              >
-                <span class="min-w-0">
-                  <span class="block truncate text-sm font-bold">{{ group.name }}</span>
-                  <span class="mt-1 block truncate text-xs text-ink-600">
-                    {{ group.code }} · {{ group.clientCount }} client{{
-                      group.clientCount === 1 ? '' : 's'
-                    }}
-                  </span>
-                </span>
-                <span
-                  class="status-chip"
-                  [class]="
-                    group.status === 'ACTIVE'
-                      ? 'bg-success-100 text-success-700'
-                      : 'bg-champagne-200 text-ink-600'
-                  "
-                >
-                  {{ group.status }}
-                </span>
-              </button>
-            } @empty {
-              <div class="empty-state min-h-32">
-                <p class="text-sm font-semibold">No client groups yet</p>
-              </div>
-            }
-          </div>
+          <label>
+            <span class="field-label">Description</span>
+            <textarea
+              name="groupDescription"
+              class="field-control min-h-28 py-3"
+              maxlength="500"
+              [(ngModel)]="groupForm.description"
+            ></textarea>
+          </label>
         </div>
+        <footer class="sheet-footer">
+          <button
+            type="button"
+            class="secondary-button flex-1"
+            [disabled]="saving()"
+            (click)="groupManagerOpen.set(false)"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="primary-button flex-1"
+            [disabled]="saving() || !groupForm.code.trim() || !groupForm.name.trim()"
+          >
+            {{ saving() ? 'Saving' : groupEditing ? 'Save changes' : 'Add group' }}
+          </button>
+        </footer>
       </form>
     </section>
   </div>

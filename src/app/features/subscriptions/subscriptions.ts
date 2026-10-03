@@ -31,11 +31,15 @@ import { ToastService } from '../../core/notifications/toast.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog';
 import { DialogFocusDirective } from '../../shared/dialog-focus.directive';
 import {
-  FEATURE_MOD_GROUPS,
+  FEATURE_MOD_KEYS,
+  type FeatureValues,
   type FeatureMods,
+  featureOverridesFrom,
   featureModsFrom,
+  featureValuesFrom,
   webDashboardFrom,
 } from '../../core/models/feature-mods';
+import { FeatureEditorComponent } from '../../shared/feature-editor/feature-editor';
 
 interface SubscriptionForm {
   clientId: string;
@@ -44,10 +48,13 @@ interface SubscriptionForm {
   startsAt: string;
   expiresAt: string;
   notes: string;
+  features: FeatureValues;
 }
 
 type SubscriptionAction = 'activate' | 'suspend' | 'reactivate' | 'cancel' | 'renew';
 type ConfirmedSubscriptionAction = Extract<SubscriptionAction, 'suspend' | 'cancel'> | 'delete';
+type SubscriptionEditorTab = 'setup' | 'features';
+type SubscriptionDetailTab = 'overview' | 'features' | 'renewals';
 
 interface SubscriptionConfirmation {
   subscription: SubscriptionRecord;
@@ -77,11 +84,11 @@ interface RenewalForm {
     LucideXCircle,
     ConfirmDialogComponent,
     DialogFocusDirective,
+    FeatureEditorComponent,
   ],
   templateUrl: './subscriptions.html',
 })
 export class SubscriptionsPage implements OnInit {
-  readonly featureModGroups = FEATURE_MOD_GROUPS;
   readonly subscriptions = signal<SubscriptionRecord[]>([]);
   readonly clients = signal<ClientRecord[]>([]);
   readonly plans = signal<PlanRecord[]>([]);
@@ -92,6 +99,8 @@ export class SubscriptionsPage implements OnInit {
   readonly actionConfirmation = signal<SubscriptionConfirmation | null>(null);
   readonly renewalTarget = signal<SubscriptionRecord | null>(null);
   readonly renewalHistory = signal<SubscriptionRenewalRecord[]>([]);
+  readonly renewalHistoryLoading = signal(false);
+  readonly renewalHistoryError = signal('');
   readonly lastRenewal = signal<SubscriptionRenewalRecord | null>(null);
   readonly total = signal(0);
   readonly totalPages = signal(1);
@@ -101,6 +110,15 @@ export class SubscriptionsPage implements OnInit {
   deviceIdDraft = '';
   featureModsDraft: FeatureMods = featureModsFrom();
   webDashboardDraft = true;
+  featureValuesDraft: FeatureValues = featureValuesFrom();
+  featureSavedValues: FeatureValues = featureValuesFrom();
+  featureBaseline: FeatureValues = featureValuesFrom();
+  createFeatureBaseline: FeatureValues = featureValuesFrom();
+  editorTab: SubscriptionEditorTab = 'setup';
+  detailTab: SubscriptionDetailTab = 'overview';
+  clientOptionSearch = '';
+  planOptionSearch = '';
+  renewalVisibleCount = 20;
   readonly pageSize = 20;
   form: SubscriptionForm = this.emptyForm();
   renewalForm: RenewalForm = { periodStartsAt: '', periodEndsAt: '', reason: '' };
@@ -138,6 +156,9 @@ export class SubscriptionsPage implements OnInit {
         if (selected) this.deviceIdDraft = selected.device?.installationId ?? '';
         if (selected) this.featureModsDraft = featureModsFrom(selected.entitlements);
         if (selected) this.webDashboardDraft = webDashboardFrom(selected.entitlements);
+        if (selected) this.featureBaseline = featureValuesFrom(selected.planVersion.features);
+        if (selected) this.featureValuesDraft = featureValuesFrom(selected.entitlements);
+        if (selected) this.featureSavedValues = featureValuesFrom(selected.entitlements);
       }
     } catch (error) {
       this.toasts.show(
@@ -168,6 +189,10 @@ export class SubscriptionsPage implements OnInit {
 
   async openCreate(): Promise<void> {
     this.form = this.emptyForm();
+    this.createFeatureBaseline = featureValuesFrom();
+    this.editorTab = 'setup';
+    this.clientOptionSearch = '';
+    this.planOptionSearch = '';
     this.editorOpen.set(true);
     try {
       const result = await firstValueFrom(
@@ -199,6 +224,9 @@ export class SubscriptionsPage implements OnInit {
   planChanged(): void {
     if (!this.form.planVersionId) return;
     const plan = this.plans().find((item) => item.versions[0]?.id === this.form.planVersionId);
+    const features = featureValuesFrom(plan?.versions[0]?.features);
+    this.createFeatureBaseline = features;
+    this.form = { ...this.form, features };
     if (plan?.versions[0]?.billingInterval === 'CUSTOM') return;
     this.form.expiresAt = '';
   }
@@ -215,6 +243,14 @@ export class SubscriptionsPage implements OnInit {
           startsAt: this.form.startsAt || undefined,
           expiresAt: this.form.expiresAt || undefined,
           notes: this.form.notes.trim() || undefined,
+          featureOverrides: this.canAdminister
+            ? featureOverridesFrom(this.createFeatureBaseline, this.form.features)
+            : undefined,
+          webDashboardEnabled:
+            this.canAdminister &&
+            this.createFeatureBaseline['webDashboard'] !== this.form.features['webDashboard']
+              ? this.form.features['webDashboard']
+              : undefined,
         }),
       );
       this.editorOpen.set(false);
@@ -397,20 +433,35 @@ export class SubscriptionsPage implements OnInit {
     this.deviceIdDraft = subscription.device?.installationId ?? '';
     this.featureModsDraft = featureModsFrom(subscription.entitlements);
     this.webDashboardDraft = webDashboardFrom(subscription.entitlements);
+    this.featureBaseline = featureValuesFrom(subscription.planVersion.features);
+    this.featureValuesDraft = featureValuesFrom(subscription.entitlements);
+    this.featureSavedValues = featureValuesFrom(subscription.entitlements);
+    this.detailTab = 'overview';
+    this.renewalVisibleCount = 20;
     this.selected.set(subscription);
     this.renewalHistory.set([]);
     void this.loadRenewals(subscription.id);
   }
 
   private async loadRenewals(subscriptionId: string): Promise<void> {
+    this.renewalHistoryLoading.set(true);
+    this.renewalHistoryError.set('');
     try {
       const history = await firstValueFrom(
         this.api.get<SubscriptionRenewalRecord[]>(`/subscriptions/${subscriptionId}/renewals`),
       );
       if (this.selected()?.id === subscriptionId) this.renewalHistory.set(history);
-    } catch {
+    } catch (error) {
       this.renewalHistory.set([]);
+      this.renewalHistoryError.set(apiErrorMessage(error, 'Renewal history could not be loaded.'));
+    } finally {
+      this.renewalHistoryLoading.set(false);
     }
+  }
+
+  retryRenewals(): void {
+    const subscription = this.selected();
+    if (subscription) void this.loadRenewals(subscription.id);
   }
 
   async updateWebDashboard(subscription: SubscriptionRecord): Promise<void> {
@@ -450,12 +501,16 @@ export class SubscriptionsPage implements OnInit {
     this.saving.set(true);
     try {
       const updated = await firstValueFrom(
-        this.api.patch<SubscriptionRecord>(`/subscriptions/${subscription.id}/feature-mods`, {
-          features: this.featureModsDraft,
+        this.api.patch<SubscriptionRecord>(`/subscriptions/${subscription.id}/features`, {
+          features: featureModsFrom(this.featureValuesDraft),
+          webDashboardEnabled: this.featureValuesDraft['webDashboard'] !== false,
         }),
       );
       this.selected.set(updated);
       this.featureModsDraft = featureModsFrom(updated.entitlements);
+      this.webDashboardDraft = webDashboardFrom(updated.entitlements);
+      this.featureValuesDraft = featureValuesFrom(updated.entitlements);
+      this.featureSavedValues = featureValuesFrom(updated.entitlements);
       this.subscriptions.update((items) =>
         items.map((item) => (item.id === updated.id ? updated : item)),
       );
@@ -542,6 +597,83 @@ export class SubscriptionsPage implements OnInit {
     return this.session.hasAnyRole('SUPER_ADMIN', 'ADMIN');
   }
 
+  setCreateFeatures(features: FeatureValues): void {
+    this.form = { ...this.form, features };
+  }
+
+  setSubscriptionFeatures(features: FeatureValues): void {
+    this.featureValuesDraft = features;
+    this.featureModsDraft = featureModsFrom(features);
+    this.webDashboardDraft = features['webDashboard'] !== false;
+  }
+
+  get subscriptionReadOnlyKeys(): readonly string[] {
+    if (!this.canAdminister) return Object.keys(this.featureValuesDraft);
+    return ['reports', 'backups', 'multiUser'];
+  }
+
+  get createReadOnlyKeys(): readonly string[] {
+    if (!this.canAdminister) return Object.keys(this.form.features);
+    return ['reports', 'backups', 'multiUser'];
+  }
+
+  get createOverrideCount(): number {
+    return (
+      FEATURE_MOD_KEYS.filter((key) => this.createFeatureBaseline[key] !== this.form.features[key])
+        .length +
+      (this.createFeatureBaseline['webDashboard'] !== this.form.features['webDashboard'] ? 1 : 0)
+    );
+  }
+
+  get subscriptionOverrideCount(): number {
+    return (
+      FEATURE_MOD_KEYS.filter((key) => this.featureBaseline[key] !== this.featureValuesDraft[key])
+        .length +
+      (this.featureBaseline['webDashboard'] !== this.featureValuesDraft['webDashboard'] ? 1 : 0)
+    );
+  }
+
+  get subscriptionFeaturesDirty(): boolean {
+    return Object.keys(this.featureValuesDraft).some(
+      (key) => this.featureValuesDraft[key] !== this.featureSavedValues[key],
+    );
+  }
+
+  get filteredClients(): ClientRecord[] {
+    const query = this.clientOptionSearch.trim().toLowerCase();
+    if (!query) return this.clients();
+    return this.clients().filter(
+      (client) =>
+        client.businessName.toLowerCase().includes(query) ||
+        client.code.toLowerCase().includes(query),
+    );
+  }
+
+  get filteredPlans(): PlanRecord[] {
+    const query = this.planOptionSearch.trim().toLowerCase();
+    if (!query) return this.plans();
+    return this.plans().filter(
+      (plan) => plan.name.toLowerCase().includes(query) || plan.code.toLowerCase().includes(query),
+    );
+  }
+
+  get visibleRenewals(): SubscriptionRenewalRecord[] {
+    return this.renewalHistory().slice(0, this.renewalVisibleCount);
+  }
+
+  showOlderRenewals(): void {
+    this.renewalVisibleCount += 20;
+  }
+
+  overrideCount(subscription: SubscriptionRecord): number {
+    const baseline = featureValuesFrom(subscription.planVersion.features);
+    const current = featureValuesFrom(subscription.entitlements);
+    return (
+      FEATURE_MOD_KEYS.filter((key) => baseline[key] !== current[key]).length +
+      (baseline['webDashboard'] !== current['webDashboard'] ? 1 : 0)
+    );
+  }
+
   get validRenewal(): boolean {
     const target = this.renewalTarget();
     if (!target || !this.renewalForm.periodEndsAt) return false;
@@ -578,6 +710,7 @@ export class SubscriptionsPage implements OnInit {
       startsAt: new Date().toISOString().slice(0, 10),
       expiresAt: '',
       notes: '',
+      features: featureValuesFrom(),
     };
   }
 

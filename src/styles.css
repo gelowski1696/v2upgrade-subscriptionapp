@@ -257,6 +257,87 @@
     animation: sheet-enter 180ms ease-out both;
   }
 
+  .sheet-panel-wide {
+    @apply sm:max-w-4xl;
+  }
+
+  .sheet-panel-inspector {
+    @apply sm:max-w-xl;
+  }
+
+  .editor-tabs {
+    @apply flex shrink-0 overflow-x-auto border-b border-champagne-300 bg-white px-3 sm:px-5;
+  }
+
+  .editor-tab {
+    @apply relative min-h-12 shrink-0 px-3 text-sm font-semibold text-ink-600 transition hover:text-ink-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-400;
+  }
+
+  .editor-tab[aria-selected='true'] {
+    @apply text-ink-950;
+  }
+
+  .editor-tab[aria-selected='true']::after {
+    content: '';
+    @apply absolute inset-x-3 bottom-0 h-0.5 bg-gold-500;
+  }
+
+  .feature-toolbar {
+    @apply grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center;
+  }
+
+  .feature-filter {
+    @apply flex min-h-11 items-center gap-2 px-2 text-sm font-semibold text-ink-600;
+  }
+
+  .feature-summary {
+    @apply mt-3 text-xs font-semibold text-ink-600;
+  }
+
+  .feature-groups {
+    @apply mt-4 divide-y divide-champagne-300 border-y border-champagne-300;
+  }
+
+  .feature-group {
+    @apply py-4 first:pt-0 last:pb-0;
+  }
+
+  .feature-group-header {
+    @apply mb-2 flex min-h-10 items-center justify-between gap-3;
+  }
+
+  .feature-group-header h3 {
+    @apply text-sm font-bold text-ink-950;
+  }
+
+  .feature-group-header p {
+    @apply mt-0.5 text-xs text-ink-600;
+  }
+
+  .feature-list {
+    @apply divide-y divide-champagne-200;
+  }
+
+  .feature-row {
+    @apply flex min-h-14 cursor-pointer items-center justify-between gap-5 py-2.5;
+  }
+
+  .feature-row-readonly {
+    @apply cursor-default;
+  }
+
+  .feature-source {
+    @apply rounded-full bg-champagne-200 px-2 py-0.5 text-[10px] font-bold uppercase text-ink-600;
+  }
+
+  .feature-source-override {
+    @apply bg-gold-200 text-gold-700;
+  }
+
+  .text-button {
+    @apply min-h-9 px-2 text-xs font-semibold text-gold-700 underline-offset-4 hover:underline disabled:opacity-40;
+  }
+
   .sheet-panel > form {
     @apply flex min-h-0 flex-1 flex-col;
   }
