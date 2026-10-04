@@ -231,6 +231,10 @@ function paymentRecord() {
     client: { id: 'client-1', businessName: 'RFI LPG STORE', group: null },
     plan: null,
     renewal: null,
+    kind: 'SINGLE' as const,
+    group: null,
+    clientCount: 1,
+    allocations: [],
   };
 }
 

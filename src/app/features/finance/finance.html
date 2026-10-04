@@ -259,24 +259,39 @@
               >
                 <div class="min-w-0">
                   <div class="flex min-w-0 items-center gap-2">
-                    <p class="truncate text-sm font-bold">{{ payment.client.businessName }}</p>
-                    @if (payment.status === 'VOIDED') {
-                      <span class="status-chip bg-champagne-200 text-ink-600">Voided</span>
+                    <p class="truncate text-sm font-bold">
+                      {{
+                        payment.kind === 'GROUP'
+                          ? payment.group?.name || 'Group payment'
+                          : payment.client.businessName
+                      }}
+                    </p>
+                    @if (payment.status !== 'POSTED') {
+                      <span class="status-chip bg-champagne-200 text-ink-600">
+                        {{ payment.status === 'PARTIALLY_VOIDED' ? 'Partially voided' : 'Voided' }}
+                      </span>
                     }
-                    @if (payment.batchId) {
-                      <span class="status-chip bg-gold-200 text-gold-700">Group allocation</span>
+                    @if (payment.kind === 'GROUP') {
+                      <span class="status-chip bg-gold-200 text-gold-700">
+                        Group · {{ payment.clientCount }} clients
+                      </span>
                     }
                   </div>
                   <p class="mt-1 truncate text-xs text-ink-600">
                     {{ paymentPurposeLabel(payment.purpose) }} ·
-                    {{ payment.plan?.name || 'Client payment' }} · {{ date(payment.paidAt) }}
+                    {{
+                      payment.kind === 'GROUP'
+                        ? payment.clientCount + ' client allocations'
+                        : payment.plan?.name || 'Client payment'
+                    }}
+                    · {{ date(payment.paidAt) }}
                   </p>
                   @if (payment.description) {
                     <p class="mt-1 truncate text-[11px] text-ink-500">
                       {{ payment.description }}
                     </p>
                   }
-                  @if (payment.client.group) {
+                  @if (payment.kind === 'SINGLE' && payment.client.group) {
                     <p class="mt-1 truncate text-[11px] text-ink-400">
                       {{ payment.client.group.name }}
                     </p>
@@ -286,7 +301,7 @@
                       Ref {{ payment.reference }}
                     </p>
                   }
-                  @if (payment.status === 'VOIDED') {
+                  @if (payment.status === 'VOIDED' && payment.kind === 'SINGLE') {
                     <p class="mt-1 truncate text-[11px] text-danger-700">
                       @if (payment.voidedAt) {
                         Voided {{ date(payment.voidedAt) }} ·
@@ -307,12 +322,17 @@
                   <button
                     type="button"
                     class="flex size-10 items-center justify-center rounded-md text-ink-400 transition hover:bg-champagne-200 hover:text-ink-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500"
-                    [attr.aria-label]="'View payment for ' + payment.client.businessName"
+                    [attr.aria-label]="
+                      'View payment for ' +
+                      (payment.kind === 'GROUP'
+                        ? payment.group?.name || 'client group'
+                        : payment.client.businessName)
+                    "
                     (click)="$event.stopPropagation(); viewPayment(payment)"
                   >
                     <svg lucideEye class="size-4"></svg>
                   </button>
-                  @if (canAdminister && payment.status === 'POSTED') {
+                  @if (canAdminister && payment.kind === 'SINGLE' && payment.status === 'POSTED') {
                     <button
                       type="button"
                       class="flex size-10 items-center justify-center rounded-md text-ink-400 transition hover:bg-danger-100 hover:text-danger-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger-700"
@@ -432,7 +452,11 @@
           <p class="page-eyebrow">Payment details</p>
           <div class="flex items-center gap-2">
             <h2 id="payment-details-title" class="truncate text-xl font-bold">
-              {{ payment.client.businessName }}
+              {{
+                payment.kind === 'GROUP'
+                  ? payment.group?.name || 'Group payment'
+                  : payment.client.businessName
+              }}
             </h2>
             <span
               class="status-chip shrink-0"
@@ -441,7 +465,7 @@
                   ? 'bg-success-100 text-success-700'
                   : 'bg-champagne-200 text-ink-600'
               "
-              >{{ payment.status }}</span
+              >{{ payment.status === 'PARTIALLY_VOIDED' ? 'PARTIAL' : payment.status }}</span
             >
           </div>
         </div>
@@ -458,7 +482,9 @@
 
       <div class="sheet-body">
         <section class="border-y border-champagne-300 bg-champagne-100/60 px-4 py-4">
-          <p class="text-xs font-semibold text-ink-500">Amount received</p>
+          <p class="text-xs font-semibold text-ink-500">
+            {{ payment.kind === 'GROUP' ? 'Group payment total' : 'Amount received' }}
+          </p>
           <p
             class="mt-1 text-3xl font-bold tabular-nums"
             [class.text-success-700]="payment.status === 'POSTED'"
@@ -480,13 +506,17 @@
           <div>
             <dt class="text-xs font-semibold text-ink-400">Plan</dt>
             <dd class="mt-1 font-semibold text-ink-800">
-              {{ payment.plan?.name || 'Not linked to a plan' }}
+              {{
+                payment.kind === 'GROUP'
+                  ? 'Multiple client allocations'
+                  : payment.plan?.name || 'Not linked to a plan'
+              }}
             </dd>
           </div>
           <div>
             <dt class="text-xs font-semibold text-ink-400">Client group</dt>
             <dd class="mt-1 font-semibold text-ink-800">
-              {{ payment.client.group?.name || 'Ungrouped' }}
+              {{ payment.group?.name || payment.client.group?.name || 'Ungrouped' }}
             </dd>
           </div>
           <div>
@@ -534,11 +564,66 @@
               </dd>
             </div>
           }
-          <div class="col-span-2 border-t border-champagne-300 pt-4">
-            <dt class="text-xs font-semibold text-ink-400">Record ID</dt>
-            <dd class="mt-1 break-all font-mono text-xs text-ink-600">{{ payment.id }}</dd>
-          </div>
+          @if (payment.kind === 'SINGLE') {
+            <div class="col-span-2 border-t border-champagne-300 pt-4">
+              <dt class="text-xs font-semibold text-ink-400">Record ID</dt>
+              <dd class="mt-1 break-all font-mono text-xs text-ink-600">{{ payment.id }}</dd>
+            </div>
+          }
         </dl>
+        @if (payment.kind === 'GROUP') {
+          <section class="border-t border-champagne-300 pt-5" aria-labelledby="batch-members-title">
+            <div class="mb-3 flex items-end justify-between gap-4">
+              <div>
+                <h3 id="batch-members-title" class="text-sm font-bold">Included clients</h3>
+                <p class="mt-1 text-xs text-ink-500">
+                  {{ payment.clientCount }} allocations recorded in this group payment.
+                </p>
+              </div>
+              <p class="text-sm font-bold tabular-nums">{{ money(payment.amount) }}</p>
+            </div>
+            <div class="divide-y divide-champagne-200 border-y border-champagne-300">
+              @for (allocation of payment.allocations; track allocation.id) {
+                <div class="grid grid-cols-[1fr_auto] items-center gap-3 py-3">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <p class="truncate text-sm font-semibold">
+                        {{ allocation.client.businessName }}
+                      </p>
+                      @if (allocation.status === 'VOIDED') {
+                        <span class="status-chip bg-champagne-200 text-ink-600">Voided</span>
+                      }
+                    </div>
+                    <p class="mt-1 truncate text-xs text-ink-500">
+                      {{ allocation.plan?.name || paymentPurposeLabel(allocation.purpose) }}
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <p
+                      class="text-sm font-bold tabular-nums"
+                      [class.text-success-700]="allocation.status === 'POSTED'"
+                      [class.text-ink-400]="allocation.status === 'VOIDED'"
+                      [class.line-through]="allocation.status === 'VOIDED'"
+                    >
+                      {{ money(allocation.amount) }}
+                    </p>
+                    @if (canAdminister && allocation.status === 'POSTED') {
+                      <button
+                        type="button"
+                        class="flex size-9 items-center justify-center rounded-md text-ink-400 transition hover:bg-danger-100 hover:text-danger-700"
+                        [attr.aria-label]="'Void payment for ' + allocation.client.businessName"
+                        [disabled]="saving()"
+                        (click)="requestVoidPayment(allocation)"
+                      >
+                        <svg lucideBan class="size-4"></svg>
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+        }
       </div>
 
       <footer class="sheet-footer">
@@ -1152,7 +1237,7 @@
   <div class="sheet-backdrop">
     <section
       appDialogFocus
-      class="sheet-panel"
+      class="sheet-panel payment-entry-panel"
       [class.sheet-panel-wide]="paymentForm.target === 'GROUP'"
       role="dialog"
       aria-modal="true"
@@ -1174,7 +1259,7 @@
           <svg lucideX class="size-5"></svg>
         </button>
       </header>
-      <form (ngSubmit)="savePayment()">
+      <form class="payment-entry-form" (ngSubmit)="savePayment()">
         <div class="sheet-body">
           <fieldset>
             <legend class="field-label">Payment for *</legend>

@@ -187,7 +187,7 @@ export interface ExpenseRecord {
 
 export type PaymentPurpose = 'INITIAL' | 'RENEWAL' | 'MODIFICATION' | 'OTHER';
 
-export interface PaymentRecord {
+export interface PaymentAllocationRecord {
   id: string;
   batchId: string | null;
   subscriptionId: string | null;
@@ -213,6 +213,14 @@ export interface PaymentRecord {
     periodStartsAt: string;
     periodEndsAt: string;
   } | null;
+}
+
+export interface PaymentRecord extends Omit<PaymentAllocationRecord, 'status'> {
+  kind: 'SINGLE' | 'GROUP';
+  group: { id: string; code: string; name: string } | null;
+  clientCount: number;
+  allocations: PaymentAllocationRecord[];
+  status: 'POSTED' | 'VOIDED' | 'PARTIALLY_VOIDED';
 }
 
 export interface FinanceOverview {

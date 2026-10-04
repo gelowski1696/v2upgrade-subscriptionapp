@@ -29,6 +29,7 @@ import type {
   ExpenseRecord,
   FinanceOverview,
   PaymentPurpose,
+  PaymentAllocationRecord,
   PaymentRecord,
   SubscriptionRecord,
   SubscriptionRenewalRecord,
@@ -89,7 +90,8 @@ interface BillingStatementForm {
 
 type FinanceTab = 'overview' | 'payments' | 'expenses';
 type ConfirmationState =
-  { kind: 'expense'; expense: ExpenseRecord } | { kind: 'payment'; payment: PaymentRecord };
+  | { kind: 'expense'; expense: ExpenseRecord }
+  | { kind: 'payment'; payment: PaymentAllocationRecord };
 
 @Component({
   selector: 'app-finance',
@@ -612,10 +614,10 @@ export class FinancePage implements OnInit {
     this.confirmation.set({ kind: 'expense', expense });
   }
 
-  requestVoidPayment(payment: PaymentRecord): void {
-    if (!this.canAdminister || this.saving() || payment.status === 'VOIDED') return;
+  requestVoidPayment(payment: PaymentAllocationRecord | PaymentRecord): void {
+    if (!this.canAdminister || this.saving() || payment.status !== 'POSTED') return;
     this.voidReason = '';
-    this.confirmation.set({ kind: 'payment', payment });
+    this.confirmation.set({ kind: 'payment', payment: payment as PaymentAllocationRecord });
   }
 
   closeConfirmation(): void {
@@ -643,6 +645,12 @@ export class FinancePage implements OnInit {
       this.confirmation.set(null);
       this.voidReason = '';
       await this.load();
+      const selectedPayment = this.selectedPayment();
+      if (selectedPayment) {
+        this.selectedPayment.set(
+          this.payments().find((payment) => payment.id === selectedPayment.id) ?? null,
+        );
+      }
     } catch (error) {
       const subject = confirmation.kind === 'expense' ? 'Expense' : 'Payment';
       this.toasts.show(

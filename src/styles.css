@@ -444,6 +444,17 @@
 }
 
 @media (min-width: 640px) {
+  .payment-entry-panel > .payment-entry-form {
+    flex: 0 1 auto;
+    overflow: hidden;
+  }
+
+  .payment-entry-form > .sheet-body {
+    flex: 0 1 auto;
+    max-height: calc(92dvh - 9.5rem);
+    overscroll-behavior: contain;
+  }
+
   .health-details {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
