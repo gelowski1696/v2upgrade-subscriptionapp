@@ -327,7 +327,7 @@
 </div>
 
 @if (selectedGroup(); as group) {
-  <div class="sheet-backdrop" (click)="closeGroupDetails()">
+  <div class="sheet-backdrop">
     <section
       appDialogFocus
       class="sheet-panel sheet-panel-inspector"
@@ -459,7 +459,7 @@
 }
 
 @if (editorOpen()) {
-  <div class="sheet-backdrop" (click)="closeEditor()">
+  <div class="sheet-backdrop">
     <section
       appDialogFocus
       class="sheet-panel sheet-panel-inspector"
@@ -591,7 +591,7 @@
 }
 
 @if (groupManagerOpen()) {
-  <div class="sheet-backdrop" (click)="groupManagerOpen.set(false)">
+  <div class="sheet-backdrop">
     <section
       appDialogFocus
       class="sheet-panel sheet-panel-inspector"

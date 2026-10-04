@@ -66,51 +66,126 @@
   @if (loading()) {
     <div class="loading-line"></div>
   }
+  @if (canOperate && subscriptions().length) {
+    <section
+      class="mb-3 flex min-h-12 flex-wrap items-center justify-between gap-3 border-y border-champagne-300 bg-white px-4 py-2 sm:rounded-md sm:border"
+      aria-label="Bulk subscription actions"
+    >
+      <label class="flex cursor-pointer items-center gap-2 text-sm font-semibold text-ink-700">
+        <input
+          type="checkbox"
+          [ngModel]="allPageSubscriptionsSelected"
+          [indeterminate]="selectedSubscriptions.length > 0 && !allPageSubscriptionsSelected"
+          (ngModelChange)="togglePageSelection($event)"
+          aria-label="Select all subscriptions on this page"
+        />
+        <span>
+          {{
+            selectedSubscriptions.length
+              ? selectedSubscriptions.length + ' selected'
+              : 'Select page'
+          }}
+        </span>
+      </label>
+      @if (selectedSubscriptions.length) {
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            class="secondary-button min-h-9 px-3 py-2 text-xs"
+            [disabled]="saving() || !bulkActionSubscriptions('activate').length"
+            (click)="requestBulkAction('activate')"
+          >
+            <svg lucideShieldCheck class="size-4"></svg>
+            Activate {{ bulkActionSubscriptions('activate').length }}
+          </button>
+          <button
+            type="button"
+            class="secondary-button min-h-9 px-3 py-2 text-xs"
+            [disabled]="saving() || !bulkActionSubscriptions('renew').length"
+            (click)="requestBulkAction('renew')"
+          >
+            <svg lucideRefreshCw class="size-4"></svg>
+            Renew {{ bulkActionSubscriptions('renew').length }}
+          </button>
+          @if (canAdminister) {
+            <button
+              type="button"
+              class="min-h-9 px-3 py-2 text-xs font-bold text-danger-700 disabled:opacity-40"
+              [disabled]="saving() || !bulkActionSubscriptions('delete').length"
+              (click)="requestBulkAction('delete')"
+            >
+              <svg lucideTrash2 class="mr-1 inline size-4"></svg>
+              Delete {{ bulkActionSubscriptions('delete').length }}
+            </button>
+          }
+        </div>
+      }
+    </section>
+  }
   <div
-    class="hidden grid-cols-[minmax(15rem,1.5fr)_minmax(11rem,1fr)_minmax(9rem,0.8fr)_minmax(8rem,0.7fr)] gap-3 border-y border-champagne-300 bg-champagne-200/60 px-5 py-2 text-[11px] font-bold uppercase text-ink-500 lg:grid"
+    class="hidden grid-cols-[1.25rem_minmax(15rem,1.5fr)_minmax(11rem,1fr)_minmax(9rem,0.8fr)_minmax(8rem,0.7fr)] gap-3 border-y border-champagne-300 bg-champagne-200/60 px-5 py-2 text-[11px] font-bold uppercase text-ink-500 lg:grid"
   >
-    <span>Client</span><span>Plan</span><span>Coverage ends</span
+    <span aria-hidden="true"></span><span>Client</span><span>Plan</span><span>Coverage ends</span
     ><span class="text-right">Price</span>
   </div>
   <section class="data-list lg:rounded-t-none lg:border-t-0">
     @for (subscription of subscriptions(); track subscription.id) {
-      <button
-        type="button"
-        class="data-row w-full grid-cols-[1fr_auto] lg:grid-cols-[minmax(15rem,1.5fr)_minmax(11rem,1fr)_minmax(9rem,0.8fr)_minmax(8rem,0.7fr)]"
-        (click)="openDetails(subscription)"
+      <div
+        class="flex min-h-[76px] items-stretch border-b border-champagne-200 transition last:border-b-0 hover:bg-champagne-100/70"
+        [class.bg-champagne-100]="isSubscriptionSelected(subscription.id)"
       >
-        <div class="min-w-0 text-left">
-          <div class="flex flex-wrap items-center gap-2">
-            <p class="truncate text-sm font-bold">{{ subscription.client.businessName }}</p>
-            <span class="status-chip" [class]="statusClasses(subscription.status)">{{
-              subscription.status
-            }}</span>
+        @if (canOperate) {
+          <label
+            class="flex w-12 shrink-0 cursor-pointer items-center justify-center lg:w-[3.25rem]"
+          >
+            <input
+              type="checkbox"
+              [ngModel]="isSubscriptionSelected(subscription.id)"
+              (ngModelChange)="toggleSubscriptionSelection(subscription.id, $event)"
+              [attr.aria-label]="'Select ' + subscription.client.businessName"
+            />
+          </label>
+        } @else {
+          <span class="hidden w-[3.25rem] shrink-0 lg:block" aria-hidden="true"></span>
+        }
+        <button
+          type="button"
+          class="grid min-w-0 flex-1 grid-cols-[1fr_auto] items-center gap-3 px-3 py-3 text-left lg:grid-cols-[minmax(15rem,1.5fr)_minmax(11rem,1fr)_minmax(9rem,0.8fr)_minmax(8rem,0.7fr)] lg:px-0 lg:pr-5"
+          (click)="openDetails(subscription)"
+        >
+          <div class="min-w-0 text-left">
+            <div class="flex flex-wrap items-center gap-2">
+              <p class="truncate text-sm font-bold">{{ subscription.client.businessName }}</p>
+              <span class="status-chip" [class]="statusClasses(subscription.status)">{{
+                subscription.status
+              }}</span>
+            </div>
+            <p class="mt-1 truncate text-xs text-ink-600">
+              {{ subscription.planVersion.plan.name }} · {{ subscription.client.code }}
+            </p>
+            <p class="mt-1 text-[11px] text-ink-400">
+              Ends {{ date(subscription.expiresAt) }} ·
+              {{
+                overrideCount(subscription)
+                  ? overrideCount(subscription) + ' overrides'
+                  : 'Plan defaults'
+              }}
+            </p>
           </div>
-          <p class="mt-1 truncate text-xs text-ink-600">
-            {{ subscription.planVersion.plan.name }} · {{ subscription.client.code }}
+          <p class="hidden truncate text-left text-sm text-ink-600 lg:block">
+            {{ subscription.planVersion.plan.name }}
           </p>
-          <p class="mt-1 text-[11px] text-ink-400">
-            Ends {{ date(subscription.expiresAt) }} ·
-            {{
-              overrideCount(subscription)
-                ? overrideCount(subscription) + ' overrides'
-                : 'Plan defaults'
-            }}
+          <p class="hidden text-left text-sm text-ink-600 lg:block">
+            {{ date(subscription.expiresAt) }}
           </p>
-        </div>
-        <p class="hidden truncate text-left text-sm text-ink-600 lg:block">
-          {{ subscription.planVersion.plan.name }}
-        </p>
-        <p class="hidden text-left text-sm text-ink-600 lg:block">
-          {{ date(subscription.expiresAt) }}
-        </p>
-        <div class="text-right">
-          <p class="text-sm font-bold tabular-nums">{{ money(subscription) }}</p>
-          <p class="mt-1 text-[11px] text-ink-400">
-            {{ subscription.billingInterval.toLowerCase() }}
-          </p>
-        </div>
-      </button>
+          <div class="text-right">
+            <p class="text-sm font-bold tabular-nums">{{ money(subscription) }}</p>
+            <p class="mt-1 text-[11px] text-ink-400">
+              {{ subscription.billingInterval.toLowerCase() }}
+            </p>
+          </div>
+        </button>
+      </div>
     } @empty {
       @if (!loading()) {
         <div class="empty-state">
@@ -149,7 +224,7 @@
 </div>
 
 @if (editorOpen()) {
-  <div class="sheet-backdrop" (click)="editorOpen.set(false)">
+  <div class="sheet-backdrop">
     <section
       appDialogFocus
       class="sheet-panel sheet-panel-wide"
@@ -508,8 +583,29 @@
   />
 }
 
+@if (bulkConfirmation(); as action) {
+  <app-confirm-dialog
+    eyebrow="Bulk subscription action"
+    [title]="bulkConfirmationTitle(action)"
+    [description]="bulkConfirmationDescription(action)"
+    [subject]="bulkActionSubscriptions(action).length + ' selected subscriptions'"
+    [subjectMeta]="
+      action === 'renew' ? 'Standard billing periods only' : 'This action applies immediately'
+    "
+    [confirmLabel]="bulkConfirmationLabel(action)"
+    cancelLabel="Keep subscriptions unchanged"
+    [workingLabel]="
+      action === 'delete' ? 'Deleting…' : action === 'renew' ? 'Renewing…' : 'Activating…'
+    "
+    [tone]="action === 'delete' ? 'danger' : 'warning'"
+    [busy]="saving()"
+    (accepted)="confirmBulkAction()"
+    (dismissed)="bulkConfirmation.set(null)"
+  />
+}
+
 @if (renewalTarget(); as renewalSubscription) {
-  <div class="sheet-backdrop z-[70]" (click)="!saving() && renewalTarget.set(null)">
+  <div class="sheet-backdrop z-[70]">
     <section
       appDialogFocus
       class="sheet-panel max-w-lg"
@@ -662,7 +758,7 @@
 }
 
 @if (selected(); as subscription) {
-  <div class="sheet-backdrop" (click)="selected.set(null)">
+  <div class="sheet-backdrop">
     <section
       appDialogFocus
       class="sheet-panel sheet-panel-wide"

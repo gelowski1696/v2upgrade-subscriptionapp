@@ -417,7 +417,7 @@
 </div>
 
 @if (selectedPayment(); as payment) {
-  <div class="sheet-backdrop" (click)="closeRecordDetails()">
+  <div class="sheet-backdrop">
     <section
       appDialogFocus
       class="sheet-panel sheet-panel-inspector"
@@ -551,7 +551,7 @@
 }
 
 @if (selectedExpense(); as expense) {
-  <div class="sheet-backdrop" (click)="closeRecordDetails()">
+  <div class="sheet-backdrop">
     <section
       appDialogFocus
       class="sheet-panel sheet-panel-inspector"
@@ -634,7 +634,7 @@
 }
 
 @if (billingOpen()) {
-  <div class="sheet-backdrop" (click)="closeBillingStatement()">
+  <div class="sheet-backdrop">
     <section
       appDialogFocus
       class="sheet-panel sheet-panel-wide max-w-[68rem]"
@@ -929,7 +929,7 @@
 }
 
 @if (expenseOpen()) {
-  <div class="sheet-backdrop" (click)="expenseOpen.set(false)">
+  <div class="sheet-backdrop">
     <section
       appDialogFocus
       class="sheet-panel"
@@ -1050,7 +1050,7 @@
 }
 
 @if (confirmation(); as item) {
-  <div class="confirmation-backdrop" (click)="closeConfirmation()">
+  <div class="confirmation-backdrop">
     <section
       appDialogFocus
       class="confirmation-dialog"
@@ -1149,7 +1149,7 @@
 }
 
 @if (paymentOpen()) {
-  <div class="sheet-backdrop" (click)="paymentOpen.set(false)">
+  <div class="sheet-backdrop">
     <section
       appDialogFocus
       class="sheet-panel"

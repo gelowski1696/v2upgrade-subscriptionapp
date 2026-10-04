@@ -157,9 +157,69 @@ describe('SubscriptionsPage group creation', () => {
   });
 });
 
+describe('SubscriptionsPage bulk actions', () => {
+  it('selects the page and renews only eligible standard subscriptions', async () => {
+    const draft = subscriptionRecord({ id: 'draft-1', status: 'DRAFT' });
+    const active = subscriptionRecord({ id: 'active-1', status: 'ACTIVE' });
+    const custom = subscriptionRecord({
+      id: 'custom-1',
+      status: 'ACTIVE',
+      billingInterval: 'CUSTOM',
+    });
+    const cancelled = subscriptionRecord({ id: 'cancelled-1', status: 'CANCELLED' });
+    const post = vi.fn().mockReturnValue(of({}));
+    const get = vi
+      .fn()
+      .mockReturnValue(of({ items: [], page: 1, pageSize: 20, total: 0, totalPages: 1 }));
+    const page = createPage({ get, post });
+    page.subscriptions.set([draft, active, custom, cancelled]);
+
+    page.togglePageSelection(true);
+
+    expect(page.selectedSubscriptions).toHaveLength(4);
+    expect(page.bulkActionSubscriptions('activate').map((item) => item.id)).toEqual(['draft-1']);
+    expect(page.bulkActionSubscriptions('renew').map((item) => item.id)).toEqual([
+      'draft-1',
+      'active-1',
+    ]);
+    expect(page.bulkActionSubscriptions('delete')).toHaveLength(4);
+
+    page.requestBulkAction('renew');
+    await page.confirmBulkAction();
+
+    expect(post.mock.calls.map(([path]) => path)).toEqual([
+      '/subscriptions/draft-1/renew',
+      '/subscriptions/active-1/renew',
+    ]);
+    expect(page.bulkConfirmation()).toBeNull();
+  });
+
+  it('deletes every selected subscription after confirmation', async () => {
+    const remove = vi.fn().mockReturnValue(of({ deleted: true }));
+    const get = vi
+      .fn()
+      .mockReturnValue(of({ items: [], page: 1, pageSize: 20, total: 0, totalPages: 1 }));
+    const page = createPage({ get, post: vi.fn(), delete: remove });
+    page.subscriptions.set([
+      subscriptionRecord({ id: 'subscription-1' }),
+      subscriptionRecord({ id: 'subscription-2' }),
+    ]);
+    page.togglePageSelection(true);
+
+    page.requestBulkAction('delete');
+    await page.confirmBulkAction();
+
+    expect(remove.mock.calls.map(([path]) => path)).toEqual([
+      '/subscriptions/subscription-1',
+      '/subscriptions/subscription-2',
+    ]);
+  });
+});
+
 function createPage(api: {
   post: ReturnType<typeof vi.fn>;
   get?: ReturnType<typeof vi.fn>;
+  delete?: ReturnType<typeof vi.fn>;
 }): SubscriptionsPage {
   const session = new SessionStore();
   session.setSession({
@@ -193,8 +253,8 @@ function groupMember(clientId: string, deviceId: string) {
   };
 }
 
-function subscriptionRecord(): SubscriptionRecord {
-  return {
+function subscriptionRecord(overrides: Partial<SubscriptionRecord> = {}): SubscriptionRecord {
+  const record: SubscriptionRecord = {
     id: 'subscription-1',
     clientId: 'client-1',
     planVersionId: 'version-1',
@@ -216,4 +276,5 @@ function subscriptionRecord(): SubscriptionRecord {
       plan: { id: 'plan-1', code: 'MONTHLY', name: 'Monthly' },
     },
   };
+  return { ...record, ...overrides };
 }

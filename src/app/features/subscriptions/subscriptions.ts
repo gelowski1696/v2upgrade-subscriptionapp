@@ -62,6 +62,7 @@ interface GroupSubscriptionMemberDraft extends GroupSubscriptionMemberOption {
 
 type SubscriptionAction = 'activate' | 'suspend' | 'reactivate' | 'cancel' | 'renew';
 type ConfirmedSubscriptionAction = Extract<SubscriptionAction, 'suspend' | 'cancel'> | 'delete';
+type BulkSubscriptionAction = 'activate' | 'renew' | 'delete';
 type SubscriptionEditorTab = 'setup' | 'features';
 type SubscriptionDetailTab = 'overview' | 'features' | 'renewals';
 type SubscriptionCreationTarget = 'CLIENT' | 'GROUP';
@@ -100,6 +101,7 @@ interface RenewalForm {
 })
 export class SubscriptionsPage implements OnInit {
   readonly subscriptions = signal<SubscriptionRecord[]>([]);
+  readonly selectedSubscriptionIds = signal<Set<string>>(new Set());
   readonly clients = signal<ClientRecord[]>([]);
   readonly groups = signal<ClientGroupRecord[]>([]);
   readonly plans = signal<PlanRecord[]>([]);
@@ -111,6 +113,7 @@ export class SubscriptionsPage implements OnInit {
   readonly editorOpen = signal(false);
   readonly selected = signal<SubscriptionRecord | null>(null);
   readonly actionConfirmation = signal<SubscriptionConfirmation | null>(null);
+  readonly bulkConfirmation = signal<BulkSubscriptionAction | null>(null);
   readonly renewalTarget = signal<SubscriptionRecord | null>(null);
   readonly renewalHistory = signal<SubscriptionRenewalRecord[]>([]);
   readonly renewalHistoryLoading = signal(false);
@@ -164,6 +167,10 @@ export class SubscriptionsPage implements OnInit {
         }),
       );
       this.subscriptions.set(result.items);
+      this.selectedSubscriptionIds.update(
+        (selected) =>
+          new Set(result.items.filter((item) => selected.has(item.id)).map((item) => item.id)),
+      );
       this.total.set(result.total);
       this.totalPages.set(result.totalPages);
       const selectedId = this.selected()?.id;
@@ -202,6 +209,83 @@ export class SubscriptionsPage implements OnInit {
     if (page < 1 || page > this.totalPages()) return;
     this.page = page;
     void this.load();
+  }
+
+  isSubscriptionSelected(subscriptionId: string): boolean {
+    return this.selectedSubscriptionIds().has(subscriptionId);
+  }
+
+  toggleSubscriptionSelection(subscriptionId: string, selected: boolean): void {
+    this.selectedSubscriptionIds.update((current) => {
+      const next = new Set(current);
+      if (selected) next.add(subscriptionId);
+      else next.delete(subscriptionId);
+      return next;
+    });
+  }
+
+  togglePageSelection(selected: boolean): void {
+    this.selectedSubscriptionIds.set(
+      selected ? new Set(this.subscriptions().map((subscription) => subscription.id)) : new Set(),
+    );
+  }
+
+  requestBulkAction(action: BulkSubscriptionAction): void {
+    if (this.bulkActionSubscriptions(action).length === 0 || this.saving()) return;
+    this.bulkConfirmation.set(action);
+  }
+
+  async confirmBulkAction(): Promise<void> {
+    const action = this.bulkConfirmation();
+    if (!action || this.saving()) return;
+    const targets = this.bulkActionSubscriptions(action);
+    if (!targets.length) return;
+    this.saving.set(true);
+    try {
+      const results = await Promise.allSettled(
+        targets.map((subscription) => {
+          if (action === 'delete') {
+            return firstValueFrom(this.api.delete(`/subscriptions/${subscription.id}`));
+          }
+          if (action === 'renew') {
+            return firstValueFrom(
+              this.api.post<SubscriptionRenewalResult>(
+                `/subscriptions/${subscription.id}/renew`,
+                {},
+              ),
+            );
+          }
+          return firstValueFrom(
+            this.api.post<SubscriptionRecord>(`/subscriptions/${subscription.id}/activate`, {}),
+          );
+        }),
+      );
+      const succeededIds = targets
+        .filter((_, index) => results[index].status === 'fulfilled')
+        .map((subscription) => subscription.id);
+      const failedCount = results.length - succeededIds.length;
+      this.selectedSubscriptionIds.update((selected) => {
+        const next = new Set(selected);
+        succeededIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      this.bulkConfirmation.set(null);
+      if (failedCount) {
+        this.toasts.show(
+          `${succeededIds.length} of ${results.length} subscriptions updated`,
+          'error',
+          `${failedCount} could not be ${this.bulkActionPastTense(action)}. Review their current status and try again.`,
+        );
+      } else {
+        this.toasts.show(
+          `${results.length} subscriptions ${this.bulkActionPastTense(action)}`,
+          'success',
+        );
+      }
+      await this.load();
+    } finally {
+      this.saving.set(false);
+    }
   }
 
   async openCreate(): Promise<void> {
@@ -708,6 +792,55 @@ export class SubscriptionsPage implements OnInit {
     return this.groupMembers().filter((member) => member.selected);
   }
 
+  get selectedSubscriptions(): SubscriptionRecord[] {
+    const selected = this.selectedSubscriptionIds();
+    return this.subscriptions().filter((subscription) => selected.has(subscription.id));
+  }
+
+  get allPageSubscriptionsSelected(): boolean {
+    return (
+      this.subscriptions().length > 0 &&
+      this.subscriptions().every((subscription) =>
+        this.selectedSubscriptionIds().has(subscription.id),
+      )
+    );
+  }
+
+  bulkActionSubscriptions(action: BulkSubscriptionAction): SubscriptionRecord[] {
+    if (action === 'delete') return this.canAdminister ? this.selectedSubscriptions : [];
+    if (action === 'activate') {
+      return this.selectedSubscriptions.filter((subscription) => subscription.status === 'DRAFT');
+    }
+    return this.selectedSubscriptions.filter(
+      (subscription) =>
+        subscription.status !== 'CANCELLED' && subscription.billingInterval !== 'CUSTOM',
+    );
+  }
+
+  bulkConfirmationTitle(action: BulkSubscriptionAction): string {
+    if (action === 'delete') return 'Delete selected subscriptions?';
+    if (action === 'renew') return 'Renew selected subscriptions?';
+    return 'Activate selected subscriptions?';
+  }
+
+  bulkConfirmationDescription(action: BulkSubscriptionAction): string {
+    const count = this.bulkActionSubscriptions(action).length;
+    if (action === 'delete') {
+      return `${count} subscriptions will be removed and their device access revoked. Finance and audit records remain available.`;
+    }
+    if (action === 'renew') {
+      return `${count} subscriptions will receive their next standard billing period. Custom-period subscriptions are excluded.`;
+    }
+    return `${count} draft subscriptions will become active and their licensed devices can begin validation.`;
+  }
+
+  bulkConfirmationLabel(action: BulkSubscriptionAction): string {
+    const count = this.bulkActionSubscriptions(action).length;
+    if (action === 'delete') return `Delete ${count}`;
+    if (action === 'renew') return `Renew ${count}`;
+    return `Activate ${count}`;
+  }
+
   get validCreation(): boolean {
     if (!this.form.planVersionId) return false;
     if (this.creationTarget === 'CLIENT') return Boolean(this.form.clientId && this.validDeviceId);
@@ -863,6 +996,10 @@ export class SubscriptionsPage implements OnInit {
       renew: 'renewed',
     };
     return labels[action];
+  }
+
+  private bulkActionPastTense(action: BulkSubscriptionAction): string {
+    return action === 'delete' ? 'deleted' : action === 'renew' ? 'renewed' : 'activated';
   }
 
   private emptyForm(): SubscriptionForm {

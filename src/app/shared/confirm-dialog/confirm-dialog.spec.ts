@@ -44,4 +44,17 @@ describe('ConfirmDialogComponent', () => {
     expect(accepted).toHaveBeenCalledOnce();
     expect(dismissed).toHaveBeenCalledOnce();
   });
+
+  it('does not dismiss when the backdrop is clicked', async () => {
+    await TestBed.configureTestingModule({ imports: [ConfirmDialogComponent] }).compileComponents();
+    const fixture = TestBed.createComponent(ConfirmDialogComponent);
+    const dismissed = vi.fn();
+    fixture.componentInstance.dismissed.subscribe(dismissed);
+    fixture.detectChanges();
+
+    const backdrop = fixture.nativeElement.querySelector('.confirm-backdrop') as HTMLElement;
+    backdrop.click();
+
+    expect(dismissed).not.toHaveBeenCalled();
+  });
 });
