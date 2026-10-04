@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ApiService } from '../../core/api/api.service';
 import { SessionStore } from '../../core/auth/session.store';
 import type {
+  GroupSubscriptionOptions,
   SubscriptionRecord,
   SubscriptionRenewalResult,
 } from '../../core/models/api.models';
@@ -69,7 +70,97 @@ describe('SubscriptionsPage renewal workflow', () => {
   });
 });
 
-function createPage(api: { post: ReturnType<typeof vi.fn> }): SubscriptionsPage {
+describe('SubscriptionsPage group creation', () => {
+  it('prefills legacy Device IDs and excludes members that already have subscriptions', async () => {
+    const options: GroupSubscriptionOptions = {
+      group: { id: 'group-1', code: 'IGNO', name: 'IGNO Clients', status: 'ACTIVE' },
+      eligibleCount: 1,
+      members: [
+        {
+          clientId: 'client-1',
+          code: 'IGNO-0001',
+          businessName: 'RFI LPG STORE',
+          ownerName: 'ROCHELLE IGNO',
+          suggestedDeviceId: 'C01E7E4C-3068-11B2-A85C-C9E0216CB38D',
+          hasActiveStore: true,
+          currentSubscription: null,
+        },
+        {
+          clientId: 'client-2',
+          code: 'IGNO-0002',
+          businessName: 'TAYTAY LPG TRADING',
+          ownerName: 'ROBERTO STA. ANA',
+          suggestedDeviceId: '22E4FBFB-8402-11E9-8B14-A06610C018AF',
+          hasActiveStore: true,
+          currentSubscription: {
+            id: 'subscription-2',
+            status: 'ACTIVE',
+            planName: 'Monthly',
+          },
+        },
+      ],
+    };
+    const get = vi.fn().mockReturnValue(of(options));
+    const page = createPage({ get, post: vi.fn() });
+    page.setCreationTarget('GROUP');
+    page.groupId = 'group-1';
+
+    await page.groupChanged();
+
+    expect(get).toHaveBeenCalledWith('/subscriptions/group/group-1/options');
+    expect(page.groupMembers()).toEqual([
+      expect.objectContaining({
+        clientId: 'client-1',
+        selected: true,
+        deviceId: 'C01E7E4C-3068-11B2-A85C-C9E0216CB38D',
+      }),
+      expect.objectContaining({ clientId: 'client-2', selected: false }),
+    ]);
+    expect(page.groupMemberIssue(page.groupMembers()[1])).toBe('Monthly · ACTIVE');
+  });
+
+  it('creates one draft for every selected eligible member', async () => {
+    const post = vi.fn().mockReturnValue(
+      of({
+        groupId: 'group-1',
+        createdCount: 2,
+        items: [],
+      }),
+    );
+    const get = vi
+      .fn()
+      .mockReturnValue(of({ items: [], page: 1, pageSize: 20, total: 0, totalPages: 1 }));
+    const page = createPage({ get, post });
+    page.setCreationTarget('GROUP');
+    page.groupId = 'group-1';
+    page.form.planVersionId = 'version-1';
+    page.form.startsAt = '2026-10-04';
+    page.groupMembers.set([
+      groupMember('client-1', 'POS-DEVICE-0001'),
+      groupMember('client-2', 'pos-device-0002'),
+    ]);
+
+    expect(page.validCreation).toBe(true);
+    await page.save();
+
+    expect(post).toHaveBeenCalledWith(
+      '/subscriptions/group',
+      expect.objectContaining({
+        groupId: 'group-1',
+        planVersionId: 'version-1',
+        members: [
+          { clientId: 'client-1', deviceId: 'POS-DEVICE-0001' },
+          { clientId: 'client-2', deviceId: 'POS-DEVICE-0002' },
+        ],
+      }),
+    );
+  });
+});
+
+function createPage(api: {
+  post: ReturnType<typeof vi.fn>;
+  get?: ReturnType<typeof vi.fn>;
+}): SubscriptionsPage {
   const session = new SessionStore();
   session.setSession({
     accessToken: 'token',
@@ -86,6 +177,20 @@ function createPage(api: { post: ReturnType<typeof vi.fn> }): SubscriptionsPage 
     session,
     { navigate: vi.fn().mockResolvedValue(true) } as never,
   );
+}
+
+function groupMember(clientId: string, deviceId: string) {
+  return {
+    clientId,
+    code: clientId.toUpperCase(),
+    businessName: `${clientId} Store`,
+    ownerName: null,
+    suggestedDeviceId: deviceId,
+    hasActiveStore: true,
+    currentSubscription: null,
+    selected: true,
+    deviceId,
+  };
 }
 
 function subscriptionRecord(): SubscriptionRecord {

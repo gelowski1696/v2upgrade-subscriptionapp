@@ -135,6 +135,32 @@ export interface SubscriptionRenewalResult {
   renewal: SubscriptionRenewalRecord;
 }
 
+export interface GroupSubscriptionMemberOption {
+  clientId: string;
+  code: string;
+  businessName: string;
+  ownerName: string | null;
+  suggestedDeviceId: string | null;
+  hasActiveStore: boolean;
+  currentSubscription: {
+    id: string;
+    status: SubscriptionStatus;
+    planName: string;
+  } | null;
+}
+
+export interface GroupSubscriptionOptions {
+  group: Pick<ClientGroupRecord, 'id' | 'code' | 'name' | 'status'>;
+  members: GroupSubscriptionMemberOption[];
+  eligibleCount: number;
+}
+
+export interface GroupSubscriptionCreateResult {
+  groupId: string;
+  createdCount: number;
+  items: SubscriptionRecord[];
+}
+
 export type ExpenseCategory =
   | 'INFRASTRUCTURE'
   | 'SOFTWARE'

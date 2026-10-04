@@ -20,7 +20,11 @@ import { apiErrorMessage } from '../../core/api/error-message';
 import { SessionStore } from '../../core/auth/session.store';
 import type {
   ApiPage,
+  ClientGroupRecord,
   ClientRecord,
+  GroupSubscriptionCreateResult,
+  GroupSubscriptionMemberOption,
+  GroupSubscriptionOptions,
   PlanRecord,
   SubscriptionRecord,
   SubscriptionRenewalRecord,
@@ -51,10 +55,16 @@ interface SubscriptionForm {
   features: FeatureValues;
 }
 
+interface GroupSubscriptionMemberDraft extends GroupSubscriptionMemberOption {
+  selected: boolean;
+  deviceId: string;
+}
+
 type SubscriptionAction = 'activate' | 'suspend' | 'reactivate' | 'cancel' | 'renew';
 type ConfirmedSubscriptionAction = Extract<SubscriptionAction, 'suspend' | 'cancel'> | 'delete';
 type SubscriptionEditorTab = 'setup' | 'features';
 type SubscriptionDetailTab = 'overview' | 'features' | 'renewals';
+type SubscriptionCreationTarget = 'CLIENT' | 'GROUP';
 
 interface SubscriptionConfirmation {
   subscription: SubscriptionRecord;
@@ -91,7 +101,11 @@ interface RenewalForm {
 export class SubscriptionsPage implements OnInit {
   readonly subscriptions = signal<SubscriptionRecord[]>([]);
   readonly clients = signal<ClientRecord[]>([]);
+  readonly groups = signal<ClientGroupRecord[]>([]);
   readonly plans = signal<PlanRecord[]>([]);
+  readonly groupMembers = signal<GroupSubscriptionMemberDraft[]>([]);
+  readonly groupOptionsLoading = signal(false);
+  readonly groupOptionsError = signal('');
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly editorOpen = signal(false);
@@ -117,6 +131,9 @@ export class SubscriptionsPage implements OnInit {
   editorTab: SubscriptionEditorTab = 'setup';
   detailTab: SubscriptionDetailTab = 'overview';
   clientOptionSearch = '';
+  groupMemberSearch = '';
+  groupId = '';
+  creationTarget: SubscriptionCreationTarget = 'CLIENT';
   planOptionSearch = '';
   renewalVisibleCount = 20;
   readonly pageSize = 20;
@@ -192,12 +209,22 @@ export class SubscriptionsPage implements OnInit {
     this.createFeatureBaseline = featureValuesFrom();
     this.editorTab = 'setup';
     this.clientOptionSearch = '';
+    this.groupMemberSearch = '';
+    this.groupId = '';
+    this.creationTarget = 'CLIENT';
+    this.groupMembers.set([]);
+    this.groupOptionsError.set('');
     this.planOptionSearch = '';
     this.editorOpen.set(true);
     try {
       const result = await firstValueFrom(
         forkJoin({
           clients: this.api.get<ApiPage<ClientRecord>>('/clients', {
+            page: 1,
+            pageSize: 100,
+            status: 'ACTIVE',
+          }),
+          groups: this.api.get<ApiPage<ClientGroupRecord>>('/client-groups', {
             page: 1,
             pageSize: 100,
             status: 'ACTIVE',
@@ -210,6 +237,7 @@ export class SubscriptionsPage implements OnInit {
         }),
       );
       this.clients.set(result.clients.items);
+      this.groups.set(result.groups.items);
       this.plans.set(result.plans.items.filter((plan) => plan.versions[0]?.publishedAt));
     } catch (error) {
       this.toasts.show(
@@ -219,6 +247,66 @@ export class SubscriptionsPage implements OnInit {
       );
       this.editorOpen.set(false);
     }
+  }
+
+  setCreationTarget(target: SubscriptionCreationTarget): void {
+    if (target === 'GROUP' && !this.canAdminister) return;
+    this.creationTarget = target;
+    this.groupOptionsError.set('');
+    if (target === 'CLIENT') {
+      this.groupId = '';
+      this.groupMembers.set([]);
+    } else {
+      this.form.clientId = '';
+      this.form.deviceId = '';
+    }
+  }
+
+  async groupChanged(): Promise<void> {
+    this.groupMembers.set([]);
+    this.groupOptionsError.set('');
+    if (!this.groupId) return;
+    this.groupOptionsLoading.set(true);
+    try {
+      const options = await firstValueFrom(
+        this.api.get<GroupSubscriptionOptions>(`/subscriptions/group/${this.groupId}/options`),
+      );
+      this.groupMembers.set(
+        options.members.map((member) => ({
+          ...member,
+          selected: this.groupMemberEligible(member),
+          deviceId: member.suggestedDeviceId ?? '',
+        })),
+      );
+    } catch (error) {
+      this.groupOptionsError.set(apiErrorMessage(error, 'Group members could not be loaded.'));
+    } finally {
+      this.groupOptionsLoading.set(false);
+    }
+  }
+
+  setGroupMemberSelected(clientId: string, selected: boolean): void {
+    this.groupMembers.update((members) =>
+      members.map((member) =>
+        member.clientId === clientId && this.groupMemberEligible(member)
+          ? { ...member, selected }
+          : member,
+      ),
+    );
+  }
+
+  updateGroupMemberDevice(clientId: string, deviceId: string): void {
+    this.groupMembers.update((members) =>
+      members.map((member) => (member.clientId === clientId ? { ...member, deviceId } : member)),
+    );
+  }
+
+  toggleAllEligibleMembers(selected: boolean): void {
+    this.groupMembers.update((members) =>
+      members.map((member) =>
+        this.groupMemberEligible(member) ? { ...member, selected } : member,
+      ),
+    );
   }
 
   planChanged(): void {
@@ -232,9 +320,40 @@ export class SubscriptionsPage implements OnInit {
   }
 
   async save(): Promise<void> {
-    if (!this.form.clientId || !this.form.planVersionId || !this.validDeviceId) return;
+    if (!this.validCreation) return;
     this.saving.set(true);
     try {
+      if (this.creationTarget === 'GROUP') {
+        const result = await firstValueFrom(
+          this.api.post<GroupSubscriptionCreateResult>('/subscriptions/group', {
+            groupId: this.groupId,
+            planVersionId: this.form.planVersionId,
+            members: this.selectedGroupMembers.map((member) => ({
+              clientId: member.clientId,
+              deviceId: member.deviceId.trim().toUpperCase(),
+            })),
+            startsAt: this.form.startsAt || undefined,
+            expiresAt: this.form.expiresAt || undefined,
+            notes: this.form.notes.trim() || undefined,
+            featureOverrides: this.canAdminister
+              ? featureOverridesFrom(this.createFeatureBaseline, this.form.features)
+              : undefined,
+            webDashboardEnabled:
+              this.canAdminister &&
+              this.createFeatureBaseline['webDashboard'] !== this.form.features['webDashboard']
+                ? this.form.features['webDashboard']
+                : undefined,
+          }),
+        );
+        this.editorOpen.set(false);
+        this.toasts.show(
+          `${result.createdCount} draft subscriptions created`,
+          'success',
+          'Review and activate each subscription when its store is ready.',
+        );
+        await this.load();
+        return;
+      }
       await firstValueFrom(
         this.api.post<SubscriptionRecord>('/subscriptions', {
           clientId: this.form.clientId,
@@ -583,6 +702,50 @@ export class SubscriptionsPage implements OnInit {
 
   get validDeviceId(): boolean {
     return this.isValidDeviceId(this.form.deviceId);
+  }
+
+  get selectedGroupMembers(): GroupSubscriptionMemberDraft[] {
+    return this.groupMembers().filter((member) => member.selected);
+  }
+
+  get validCreation(): boolean {
+    if (!this.form.planVersionId) return false;
+    if (this.creationTarget === 'CLIENT') return Boolean(this.form.clientId && this.validDeviceId);
+    const selected = this.selectedGroupMembers;
+    if (!this.groupId || selected.length === 0) return false;
+    const normalizedIds = selected.map((member) => member.deviceId.trim().toUpperCase());
+    return (
+      normalizedIds.every((deviceId) => this.isValidDeviceId(deviceId)) &&
+      new Set(normalizedIds).size === normalizedIds.length
+    );
+  }
+
+  get filteredGroupMembers(): GroupSubscriptionMemberDraft[] {
+    const query = this.groupMemberSearch.trim().toLowerCase();
+    if (!query) return this.groupMembers();
+    return this.groupMembers().filter(
+      (member) =>
+        member.businessName.toLowerCase().includes(query) ||
+        member.code.toLowerCase().includes(query) ||
+        member.ownerName?.toLowerCase().includes(query),
+    );
+  }
+
+  get allEligibleMembersSelected(): boolean {
+    const eligible = this.groupMembers().filter((member) => this.groupMemberEligible(member));
+    return eligible.length > 0 && eligible.every((member) => member.selected);
+  }
+
+  groupMemberEligible(member: GroupSubscriptionMemberOption): boolean {
+    return member.hasActiveStore && !member.currentSubscription;
+  }
+
+  groupMemberIssue(member: GroupSubscriptionMemberOption): string {
+    if (!member.hasActiveStore) return 'No active store';
+    if (member.currentSubscription) {
+      return `${member.currentSubscription.planName} · ${member.currentSubscription.status}`;
+    }
+    return '';
   }
 
   get validDeviceIdDraft(): boolean {

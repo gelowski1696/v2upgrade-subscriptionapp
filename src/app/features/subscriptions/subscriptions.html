@@ -162,7 +162,9 @@
       <header class="sheet-header">
         <div>
           <p class="page-eyebrow">Subscription</p>
-          <h2 id="subscription-editor-title" class="text-xl font-bold">Create subscription</h2>
+          <h2 id="subscription-editor-title" class="text-xl font-bold">
+            {{ creationTarget === 'GROUP' ? 'Create group subscriptions' : 'Create subscription' }}
+          </h2>
         </div>
         <button
           type="button"
@@ -198,18 +200,52 @@
       <form (ngSubmit)="save()">
         <div class="sheet-body">
           @if (editorTab === 'setup') {
-            <div class="mx-auto max-w-2xl space-y-4">
+            <div class="mx-auto max-w-3xl space-y-4">
+              @if (canAdminister) {
+                <div>
+                  <span class="field-label">Create for *</span>
+                  <div class="payment-target-toggle">
+                    <button
+                      type="button"
+                      [class.is-active]="creationTarget === 'CLIENT'"
+                      (click)="setCreationTarget('CLIENT')"
+                    >
+                      One client
+                    </button>
+                    <button
+                      type="button"
+                      [class.is-active]="creationTarget === 'GROUP'"
+                      (click)="setCreationTarget('GROUP')"
+                    >
+                      Client group
+                    </button>
+                  </div>
+                </div>
+              }
               <div class="grid gap-4 sm:grid-cols-2">
-                <label>
-                  <span class="field-label">Find client</span>
-                  <input
-                    name="clientOptionSearch"
-                    class="field-control"
-                    [(ngModel)]="clientOptionSearch"
-                    placeholder="Name or code"
-                    autocomplete="off"
-                  />
-                </label>
+                @if (creationTarget === 'CLIENT') {
+                  <label>
+                    <span class="field-label">Find client</span>
+                    <input
+                      name="clientOptionSearch"
+                      class="field-control"
+                      [(ngModel)]="clientOptionSearch"
+                      placeholder="Name or code"
+                      autocomplete="off"
+                    />
+                  </label>
+                } @else {
+                  <label>
+                    <span class="field-label">Find group member</span>
+                    <input
+                      name="groupMemberSearch"
+                      class="field-control"
+                      [(ngModel)]="groupMemberSearch"
+                      placeholder="Business, owner, or code"
+                      autocomplete="off"
+                    />
+                  </label>
+                }
                 <label>
                   <span class="field-label">Find plan</span>
                   <input
@@ -221,23 +257,42 @@
                   />
                 </label>
               </div>
-              <label
-                ><span class="field-label">Client *</span
-                ><select
-                  name="client"
-                  data-dialog-initial-focus
-                  class="field-control"
-                  [(ngModel)]="form.clientId"
-                  required
+              @if (creationTarget === 'CLIENT') {
+                <label
+                  ><span class="field-label">Client *</span
+                  ><select
+                    name="client"
+                    data-dialog-initial-focus
+                    class="field-control"
+                    [(ngModel)]="form.clientId"
+                    required
+                  >
+                    <option value="" disabled>Select client</option>
+                    @for (client of filteredClients; track client.id) {
+                      <option [value]="client.id">
+                        {{ client.businessName }} ({{ client.code }})
+                      </option>
+                    }
+                  </select></label
                 >
-                  <option value="" disabled>Select client</option>
-                  @for (client of filteredClients; track client.id) {
-                    <option [value]="client.id">
-                      {{ client.businessName }} ({{ client.code }})
-                    </option>
-                  }
-                </select></label
-              >
+              } @else {
+                <label>
+                  <span class="field-label">Client group *</span>
+                  <select
+                    name="clientGroup"
+                    data-dialog-initial-focus
+                    class="field-control"
+                    [(ngModel)]="groupId"
+                    (ngModelChange)="groupChanged()"
+                    required
+                  >
+                    <option value="" disabled>Select active group</option>
+                    @for (group of groups(); track group.id) {
+                      <option [value]="group.id">{{ group.name }} ({{ group.clientCount }})</option>
+                    }
+                  </select>
+                </label>
+              }
               <label
                 ><span class="field-label">Plan *</span
                 ><select
@@ -256,23 +311,105 @@
                   }
                 </select></label
               >
-              <label
-                ><span class="field-label">Device ID *</span
-                ><input
-                  name="deviceId"
-                  class="field-control font-mono uppercase"
-                  type="text"
-                  minlength="8"
-                  maxlength="120"
-                  autocomplete="off"
-                  placeholder="POS-DEVICE-ID"
-                  [(ngModel)]="form.deviceId"
-                  required
-                />
-                <span class="mt-1 block text-[11px] text-ink-500"
-                  >Enter the Device ID shown by the client's Windows POS.</span
-                ></label
-              >
+              @if (creationTarget === 'CLIENT') {
+                <label
+                  ><span class="field-label">Device ID *</span
+                  ><input
+                    name="deviceId"
+                    class="field-control font-mono uppercase"
+                    type="text"
+                    minlength="8"
+                    maxlength="120"
+                    autocomplete="off"
+                    placeholder="POS-DEVICE-ID"
+                    [(ngModel)]="form.deviceId"
+                    required
+                  />
+                  <span class="mt-1 block text-[11px] text-ink-500"
+                    >Enter the Device ID shown by the client's Windows POS.</span
+                  ></label
+                >
+              } @else if (groupOptionsLoading()) {
+                <div class="loading-line" aria-label="Loading group members"></div>
+              } @else if (groupOptionsError()) {
+                <div class="border border-danger-200 bg-danger-100 p-4 text-sm text-danger-700">
+                  {{ groupOptionsError() }}
+                </div>
+              } @else if (groupId) {
+                <section class="border border-champagne-300 bg-white">
+                  <div
+                    class="flex flex-wrap items-center justify-between gap-3 border-b border-champagne-300 px-4 py-3"
+                  >
+                    <div>
+                      <h3 class="text-sm font-bold">Group members</h3>
+                      <p class="mt-1 text-xs text-ink-500">
+                        {{ selectedGroupMembers.length }} selected · one draft per eligible member
+                      </p>
+                    </div>
+                    <label class="flex cursor-pointer items-center gap-2 text-xs font-semibold">
+                      <input
+                        type="checkbox"
+                        name="selectAllGroupMembers"
+                        [ngModel]="allEligibleMembersSelected"
+                        (ngModelChange)="toggleAllEligibleMembers($event)"
+                      />
+                      Select all eligible
+                    </label>
+                  </div>
+                  <div class="max-h-72 divide-y divide-champagne-200 overflow-y-auto">
+                    @for (member of filteredGroupMembers; track member.clientId) {
+                      <div
+                        class="grid gap-3 px-4 py-3 sm:grid-cols-[1fr_minmax(16rem,1fr)] sm:items-center"
+                        [class.bg-champagne-100]="!groupMemberEligible(member)"
+                      >
+                        <label class="flex min-w-0 items-start gap-3">
+                          <input
+                            class="mt-1"
+                            type="checkbox"
+                            [name]="'groupMember-' + member.clientId"
+                            [ngModel]="member.selected"
+                            (ngModelChange)="setGroupMemberSelected(member.clientId, $event)"
+                            [disabled]="!groupMemberEligible(member)"
+                          />
+                          <span class="min-w-0">
+                            <span class="block truncate text-sm font-bold">{{
+                              member.businessName
+                            }}</span>
+                            <span class="block truncate text-xs text-ink-500">
+                              {{ member.code
+                              }}{{ member.ownerName ? ' · ' + member.ownerName : '' }}
+                            </span>
+                            @if (groupMemberIssue(member)) {
+                              <span class="mt-1 block text-xs font-semibold text-warning-700">
+                                {{ groupMemberIssue(member) }}
+                              </span>
+                            }
+                          </span>
+                        </label>
+                        <label>
+                          <span class="field-label">Device ID</span>
+                          <input
+                            class="field-control font-mono uppercase"
+                            type="text"
+                            minlength="8"
+                            maxlength="120"
+                            autocomplete="off"
+                            [name]="'groupDevice-' + member.clientId"
+                            [ngModel]="member.deviceId"
+                            (ngModelChange)="updateGroupMemberDevice(member.clientId, $event)"
+                            [disabled]="!member.selected"
+                            placeholder="POS-DEVICE-ID"
+                          />
+                        </label>
+                      </div>
+                    } @empty {
+                      <p class="px-4 py-6 text-center text-sm text-ink-500">
+                        No members match this search.
+                      </p>
+                    }
+                  </div>
+                </section>
+              }
               <div class="grid gap-4 sm:grid-cols-2">
                 <label
                   ><span class="field-label">Start date</span
@@ -304,8 +441,12 @@
               <div class="mb-5">
                 <h3 class="text-base font-bold">Subscription features</h3>
                 <p class="mt-1 text-sm text-ink-500">
-                  Starts with the selected plan's access. Changes here apply only to this
-                  subscription.
+                  Starts with the selected plan's access. Changes here apply to
+                  {{
+                    creationTarget === 'GROUP'
+                      ? 'every selected group member'
+                      : 'this subscription'
+                  }}.
                 </p>
               </div>
               <app-feature-editor
@@ -328,9 +469,15 @@
           ><button
             type="submit"
             class="primary-button flex-1"
-            [disabled]="saving() || !form.clientId || !form.planVersionId || !validDeviceId"
+            [disabled]="saving() || !validCreation"
           >
-            {{ saving() ? 'Creating' : 'Create draft' }}
+            {{
+              saving()
+                ? 'Creating'
+                : creationTarget === 'GROUP'
+                  ? 'Create ' + selectedGroupMembers.length + ' drafts'
+                  : 'Create draft'
+            }}
           </button>
         </footer>
       </form>
