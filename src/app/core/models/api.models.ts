@@ -30,6 +30,7 @@ export interface ClientGroupRecord {
   name: string;
   description: string | null;
   status: ClientGroupStatus;
+  billingEmail?: string | null;
   clientCount: number;
   createdAt: string;
   updatedAt: string;
@@ -41,6 +42,7 @@ export interface ClientRecord {
   businessName: string;
   ownerName: string | null;
   email: string | null;
+  billingEmail?: string | null;
   phone: string | null;
   address: string | null;
   notes: string | null;
@@ -214,6 +216,67 @@ export interface FinanceOverview {
     payments: number;
   }>;
   recentPayments: PaymentRecord[];
+}
+
+export type BillingStatementTarget = 'CLIENT' | 'GROUP';
+export type BillingStatementDeliveryStatus =
+  'PROCESSING' | 'SENT' | 'DELAYED' | 'DELIVERED' | 'BOUNCED' | 'COMPLAINED' | 'FAILED';
+
+export interface BillingStatementLine {
+  subscriptionId: string;
+  clientCode: string;
+  ownerName: string | null;
+  businessName: string;
+  address: string | null;
+  planName: string;
+  periodStartsAt: string;
+  periodEndsAt: string | null;
+  amount: number;
+}
+
+export interface BillingStatementDeliverySummary {
+  id: string;
+  recipientEmail: string;
+  subject: string;
+  statementDate: string;
+  dueDate: string | null;
+  totalAmount: string;
+  currency: string;
+  status: BillingStatementDeliveryStatus;
+  providerStatus: string | null;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  createdAt: string;
+}
+
+export interface BillingStatementPreview {
+  targetType: BillingStatementTarget;
+  targetId: string;
+  targetCode: string;
+  targetName: string;
+  savedRecipientEmail: string | null;
+  lines: BillingStatementLine[];
+  currency: string;
+  totalAmount: number;
+  company: {
+    name: string;
+    address: string;
+    email: string;
+    phone: string;
+    paymentInstructions: string[];
+  };
+  emailConfigured: boolean;
+  defaultSubject: string;
+  recentDeliveries: BillingStatementDeliverySummary[];
+}
+
+export interface BillingStatementSendResult {
+  id: string;
+  statementNumber: string;
+  status: 'SENT';
+  providerMessageId: string;
+  recipientEmail: string;
+  sentAt: string;
 }
 
 export interface ApiFailure {

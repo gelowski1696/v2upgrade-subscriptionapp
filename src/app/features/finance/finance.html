@@ -6,6 +6,11 @@
       <p class="page-subtitle">Collected subscription payments and operating costs.</p>
     </div>
     <div class="flex gap-2">
+      @if (canAdminister) {
+        <button type="button" class="secondary-button" (click)="openBillingStatement()">
+          <svg lucideMail class="size-4"></svg><span>Send bill</span>
+        </button>
+      }
       <button type="button" class="secondary-button" (click)="openPayment()">
         <svg lucideCircleDollarSign class="size-4"></svg><span>Record payment</span>
       </button>
@@ -624,6 +629,301 @@
           Close
         </button>
       </footer>
+    </section>
+  </div>
+}
+
+@if (billingOpen()) {
+  <div class="sheet-backdrop" (click)="closeBillingStatement()">
+    <section
+      appDialogFocus
+      class="sheet-panel sheet-panel-wide max-w-[68rem]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="billing-title"
+      (dialogEscape)="closeBillingStatement()"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="sheet-header">
+        <div>
+          <p class="page-eyebrow">Client billing</p>
+          <h2 id="billing-title" class="text-xl font-bold">Send billing statement</h2>
+          <p class="mt-1 text-sm text-ink-500">
+            Build the PDF from current subscription records, then email it through Resend.
+          </p>
+        </div>
+        <button
+          type="button"
+          class="icon-button"
+          aria-label="Close"
+          (click)="closeBillingStatement()"
+        >
+          <svg lucideX class="size-5"></svg>
+        </button>
+      </header>
+
+      <form (ngSubmit)="sendBillingStatement()">
+        <div class="billing-workspace grid min-h-[34rem]">
+          <div class="flex flex-col gap-4 p-5 sm:p-6">
+            <fieldset>
+              <legend class="field-label">Statement for *</legend>
+              <div class="payment-target-toggle">
+                <button
+                  type="button"
+                  data-dialog-initial-focus
+                  [class.is-active]="billingForm.targetType === 'CLIENT'"
+                  [attr.aria-pressed]="billingForm.targetType === 'CLIENT'"
+                  (click)="billingTargetTypeChanged('CLIENT')"
+                >
+                  One client
+                </button>
+                <button
+                  type="button"
+                  [class.is-active]="billingForm.targetType === 'GROUP'"
+                  [attr.aria-pressed]="billingForm.targetType === 'GROUP'"
+                  (click)="billingTargetTypeChanged('GROUP')"
+                >
+                  Client group
+                </button>
+              </div>
+            </fieldset>
+
+            <label>
+              <span class="field-label">
+                {{ billingForm.targetType === 'CLIENT' ? 'Client' : 'Client group' }} *
+              </span>
+              <select
+                name="billingTarget"
+                class="field-control"
+                [(ngModel)]="billingForm.targetId"
+                (ngModelChange)="billingTargetChanged()"
+                required
+              >
+                <option value="" disabled>
+                  Select {{ billingForm.targetType === 'CLIENT' ? 'client' : 'group' }}
+                </option>
+                @if (billingForm.targetType === 'CLIENT') {
+                  @for (client of clients(); track client.id) {
+                    @if (client.status === 'ACTIVE') {
+                      <option [value]="client.id">
+                        {{ client.businessName }} ({{ client.code }})
+                      </option>
+                    }
+                  }
+                } @else {
+                  @for (group of groups(); track group.id) {
+                    @if (group.status === 'ACTIVE') {
+                      <option [value]="group.id">{{ group.name }} ({{ group.clientCount }})</option>
+                    }
+                  }
+                }
+              </select>
+            </label>
+
+            <label>
+              <span class="field-label">Send to *</span>
+              <input
+                name="billingRecipient"
+                class="field-control"
+                type="email"
+                autocomplete="email"
+                maxlength="180"
+                placeholder="billing@example.com"
+                [(ngModel)]="billingForm.recipientEmail"
+                required
+              />
+            </label>
+            <label
+              class="flex cursor-pointer items-start gap-3 rounded-md border border-champagne-300 bg-champagne-100/50 px-3 py-3 text-sm"
+            >
+              <input
+                class="mt-0.5 size-4 accent-gold-600"
+                name="rememberBillingEmail"
+                type="checkbox"
+                [(ngModel)]="billingForm.rememberEmail"
+              />
+              <span class="flex flex-col gap-0.5">
+                <strong>Remember this email</strong>
+                <small class="text-xs text-ink-500"
+                  >Use it next time for this
+                  {{ billingForm.targetType === 'CLIENT' ? 'client' : 'group' }}.</small
+                >
+              </span>
+            </label>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label>
+                <span class="field-label">Statement date *</span>
+                <input
+                  name="billingStatementDate"
+                  class="field-control"
+                  type="date"
+                  [(ngModel)]="billingForm.statementDate"
+                  required
+                />
+              </label>
+              <label>
+                <span class="field-label">Due date</span>
+                <input
+                  name="billingDueDate"
+                  class="field-control"
+                  type="date"
+                  [min]="billingForm.statementDate"
+                  [(ngModel)]="billingForm.dueDate"
+                />
+              </label>
+            </div>
+
+            <label>
+              <span class="field-label">Email subject *</span>
+              <input
+                name="billingSubject"
+                class="field-control"
+                maxlength="180"
+                [(ngModel)]="billingForm.subject"
+                required
+              />
+            </label>
+            <label>
+              <span class="field-label">Message (optional)</span>
+              <textarea
+                name="billingMessage"
+                class="field-control min-h-24 py-3"
+                maxlength="1000"
+                placeholder="Add a short note above the statement summary."
+                [(ngModel)]="billingForm.message"
+              ></textarea>
+            </label>
+
+            @if (billingError()) {
+              <div
+                class="rounded-md border border-danger-700 bg-danger-100 p-3 text-sm text-danger-700"
+                role="alert"
+              >
+                {{ billingError() }}
+              </div>
+            }
+          </div>
+
+          <aside
+            class="border-t border-champagne-300 bg-champagne-100/60 p-5 sm:p-6 min-[900px]:border-l min-[900px]:border-t-0"
+            aria-live="polite"
+          >
+            @if (billingLoading()) {
+              <div class="loading-line"></div>
+              <p class="mt-4 text-sm text-ink-500">Preparing current subscription totals…</p>
+            } @else if (billingPreview(); as preview) {
+              <div
+                class="mb-5 flex items-start justify-between gap-5 border-b border-champagne-300 pb-4"
+              >
+                <div>
+                  <p class="page-eyebrow">PDF preview</p>
+                  <h3 class="mt-1 text-lg font-bold">{{ preview.targetName }}</h3>
+                  <p class="mt-1 text-xs text-ink-500">
+                    {{ preview.targetCode }} · {{ preview.lines.length }} subscription{{
+                      preview.lines.length === 1 ? '' : 's'
+                    }}
+                  </p>
+                </div>
+                <strong class="shrink-0 text-lg font-bold tabular-nums text-ink-950">{{
+                  billingMoney(preview.totalAmount, preview.currency)
+                }}</strong>
+              </div>
+
+              @if (!preview.emailConfigured) {
+                <div
+                  class="rounded-md border border-warning-700 bg-warning-100 p-3 text-sm text-warning-900"
+                >
+                  Resend is not configured. Add a valid API key and verified sender in the VPS
+                  environment before sending.
+                </div>
+              }
+
+              <div class="max-h-52 overflow-y-auto border-y border-champagne-300">
+                @for (line of preview.lines; track line.subscriptionId) {
+                  <div
+                    class="flex items-center justify-between gap-4 border-b border-champagne-200 py-3 last:border-0"
+                  >
+                    <div class="min-w-0">
+                      <p class="truncate text-sm font-semibold">{{ line.businessName }}</p>
+                      <p class="truncate text-xs text-ink-500">
+                        {{ line.clientCode }} · {{ line.planName }}
+                      </p>
+                    </div>
+                    <span class="text-sm font-bold tabular-nums">{{
+                      billingMoney(line.amount, preview.currency)
+                    }}</span>
+                  </div>
+                }
+              </div>
+
+              <div class="my-5 border-l-2 border-gold-500 pl-4">
+                <p class="text-xs font-bold uppercase tracking-wide text-ink-500">
+                  Payment details in PDF
+                </p>
+                @for (instruction of preview.company.paymentInstructions; track instruction) {
+                  <p class="mt-1 text-sm text-ink-700">{{ instruction }}</p>
+                }
+              </div>
+
+              @if (preview.recentDeliveries.length) {
+                <div>
+                  <p class="field-label">Recent sends</p>
+                  <div class="mt-1">
+                    @for (delivery of preview.recentDeliveries; track delivery.id) {
+                      <div
+                        class="flex items-center justify-between gap-4 border-b border-champagne-200 py-3 last:border-0"
+                      >
+                        <div class="min-w-0">
+                          <p class="truncate text-xs font-semibold">
+                            {{ delivery.recipientEmail }}
+                          </p>
+                          <p class="mt-0.5 text-xs text-ink-400">{{ date(delivery.createdAt) }}</p>
+                        </div>
+                        <span
+                          class="billing-status shrink-0 rounded-full bg-champagne-200 px-2 py-1 text-[0.65rem] font-bold tracking-wide text-ink-600"
+                          [attr.data-status]="delivery.status"
+                          >{{ delivery.status }}</span
+                        >
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            } @else {
+              <div
+                class="flex min-h-80 flex-col items-center justify-center text-center text-ink-400"
+              >
+                <svg lucideReceiptText class="size-8"></svg>
+                <h3 class="mt-4 text-base font-bold">Choose who to bill</h3>
+                <p class="mt-2 max-w-sm text-sm leading-6 text-ink-500">
+                  The preview uses active, trial, and grace-period subscriptions. Amounts are
+                  recalculated by the server before the email is sent.
+                </p>
+              </div>
+            }
+          </aside>
+        </div>
+
+        <footer class="sheet-footer">
+          <button
+            type="button"
+            class="secondary-button flex-1"
+            [disabled]="saving()"
+            (click)="closeBillingStatement()"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="primary-button flex-1"
+            [disabled]="saving() || billingLoading() || !validBillingStatement"
+          >
+            <svg lucideSend class="size-4"></svg>
+            {{ saving() ? 'Sending…' : 'Send PDF statement' }}
+          </button>
+        </footer>
+      </form>
     </section>
   </div>
 }

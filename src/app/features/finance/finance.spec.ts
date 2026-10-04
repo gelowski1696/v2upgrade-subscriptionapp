@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { of } from 'rxjs';
 import type { ApiService } from '../../core/api/api.service';
 import { SessionStore } from '../../core/auth/session.store';
 import type { ToastService } from '../../core/notifications/toast.service';
@@ -104,17 +105,111 @@ describe('FinancePage payment validation', () => {
     expect(page.validPayment).toBe(true);
     expect(page.groupPaymentTotal).toBe(2998);
   });
+
+  it('loads a remembered billing email from the selected client preview', async () => {
+    const api = {
+      get: vi.fn().mockReturnValue(of(billingPreview())),
+    };
+    const page = createPage(api as unknown as ApiService);
+    page.openBillingStatement();
+    page.billingForm.targetId = 'client-1';
+
+    await page.billingTargetChanged();
+
+    expect(api.get).toHaveBeenCalledWith('/finance/billing-statements/preview', {
+      targetType: 'CLIENT',
+      targetId: 'client-1',
+    });
+    expect(page.billingForm.recipientEmail).toBe('accounts@example.test');
+    expect(page.billingForm.subject).toContain('RFI LPG STORE');
+    expect(page.validBillingStatement).toBe(true);
+  });
+
+  it('sends the manual email and remember preference', async () => {
+    const api = {
+      post: vi.fn().mockReturnValue(
+        of({
+          id: 'delivery-1',
+          statementNumber: 'BS-20261004-12345678',
+          status: 'SENT',
+          providerMessageId: 'email-1',
+          recipientEmail: 'manual@example.test',
+          sentAt: '2026-10-04T01:00:00.000Z',
+        }),
+      ),
+    };
+    const page = createPage(api as unknown as ApiService);
+    page.billingOpen.set(true);
+    page.billingPreview.set(billingPreview());
+    page.billingForm = {
+      ...page.billingForm,
+      targetId: 'client-1',
+      recipientEmail: 'manual@example.test',
+      rememberEmail: true,
+      statementDate: '2026-10-04',
+      dueDate: '2026-10-11',
+      subject: 'October statement',
+    };
+
+    await page.sendBillingStatement();
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/finance/billing-statements/send',
+      expect.objectContaining({
+        recipientEmail: 'manual@example.test',
+        rememberEmail: true,
+        targetType: 'CLIENT',
+        targetId: 'client-1',
+      }),
+    );
+    expect(page.billingOpen()).toBe(false);
+  });
 });
 
-function createPage(): FinancePage {
+function createPage(api: ApiService = {} as ApiService): FinancePage {
   const queryParamMap = { get: vi.fn().mockReturnValue(null) };
   return new FinancePage(
-    {} as ApiService,
+    api,
     { show: vi.fn() } as unknown as ToastService,
     new SessionStore(),
     { snapshot: { queryParamMap } } as never,
     { navigate: vi.fn().mockResolvedValue(true) } as never,
   );
+}
+
+function billingPreview() {
+  return {
+    targetType: 'CLIENT' as const,
+    targetId: 'client-1',
+    targetCode: 'IGNO-0001',
+    targetName: 'RFI LPG STORE',
+    savedRecipientEmail: 'accounts@example.test',
+    lines: [
+      {
+        subscriptionId: 'subscription-1',
+        clientCode: 'IGNO-0001',
+        ownerName: 'ROCHELLE IGNO',
+        businessName: 'RFI LPG STORE',
+        address: 'Valenzuela City',
+        planName: 'LPG POS + Online Access',
+        periodStartsAt: '2026-10-01T00:00:00.000Z',
+        periodEndsAt: '2026-10-31T00:00:00.000Z',
+        amount: 1638,
+      },
+    ],
+    currency: 'PHP',
+    totalAmount: 1638,
+    company: {
+      name: 'VMJAMTECH',
+      address: 'Valenzuela City',
+      email: 'billing@example.test',
+      phone: '09123456789',
+      paymentInstructions: ['Contact us for payment instructions.'],
+    },
+    emailConfigured: true,
+    defaultSubject: 'October 2026 LPG POS Billing Statement - RFI LPG STORE',
+    recentDeliveries: [],
+  };
 }
 
 function paymentRecord() {

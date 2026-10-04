@@ -39,6 +39,23 @@
   @apply mt-5 flex items-center justify-between gap-4 border-y border-champagne-300 bg-champagne-100/60 px-4 py-3;
 }
 
+.billing-status[data-status='DELIVERED'],
+.billing-status[data-status='SENT'] {
+  @apply bg-success-100 text-success-700;
+}
+
+.billing-status[data-status='FAILED'],
+.billing-status[data-status='BOUNCED'],
+.billing-status[data-status='COMPLAINED'] {
+  @apply bg-danger-100 text-danger-700;
+}
+
+@media (min-width: 900px) {
+  .billing-workspace {
+    grid-template-columns: minmax(0, 0.9fr) minmax(22rem, 1.1fr);
+  }
+}
+
 @keyframes confirmation-backdrop-enter {
   from {
     opacity: 0;

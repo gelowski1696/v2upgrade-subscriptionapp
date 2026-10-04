@@ -7,9 +7,11 @@ import {
   LucideCircleAlert,
   LucideCircleDollarSign,
   LucideEye,
+  LucideMail,
   LucidePlus,
   LucideReceiptText,
   LucideTrash2,
+  LucideSend,
   LucideX,
 } from '@lucide/angular';
 import { firstValueFrom, forkJoin } from 'rxjs';
@@ -18,6 +20,9 @@ import { apiErrorMessage } from '../../core/api/error-message';
 import { SessionStore } from '../../core/auth/session.store';
 import type {
   ApiPage,
+  BillingStatementPreview,
+  BillingStatementSendResult,
+  BillingStatementTarget,
   ClientGroupRecord,
   ClientRecord,
   ExpenseCategory,
@@ -71,6 +76,17 @@ interface GroupPaymentAllocation {
   amount: string;
 }
 
+interface BillingStatementForm {
+  targetType: BillingStatementTarget;
+  targetId: string;
+  recipientEmail: string;
+  rememberEmail: boolean;
+  statementDate: string;
+  dueDate: string;
+  subject: string;
+  message: string;
+}
+
 type FinanceTab = 'overview' | 'payments' | 'expenses';
 type ConfirmationState =
   { kind: 'expense'; expense: ExpenseRecord } | { kind: 'payment'; payment: PaymentRecord };
@@ -84,9 +100,11 @@ type ConfirmationState =
     LucideCircleAlert,
     LucideCircleDollarSign,
     LucideEye,
+    LucideMail,
     LucidePlus,
     LucideReceiptText,
     LucideTrash2,
+    LucideSend,
     LucideX,
     DialogFocusDirective,
   ],
@@ -127,6 +145,10 @@ export class FinancePage implements OnInit {
   readonly error = signal('');
   readonly expenseOpen = signal(false);
   readonly paymentOpen = signal(false);
+  readonly billingOpen = signal(false);
+  readonly billingLoading = signal(false);
+  readonly billingPreview = signal<BillingStatementPreview | null>(null);
+  readonly billingError = signal('');
   readonly selectedExpense = signal<ExpenseRecord | null>(null);
   readonly selectedPayment = signal<PaymentRecord | null>(null);
   readonly groupClientsLoading = signal(false);
@@ -146,6 +168,7 @@ export class FinancePage implements OnInit {
   purposeFilter: PaymentPurpose | '' = '';
   expenseForm = this.emptyExpense();
   paymentForm = this.emptyPayment();
+  billingForm = this.emptyBillingStatement();
   groupDefaultAmount = '';
   voidReason = '';
   private handledPaymentLink = false;
@@ -250,6 +273,94 @@ export class FinancePage implements OnInit {
     this.groupAllocations.set([]);
     this.groupDefaultAmount = '';
     this.paymentOpen.set(true);
+  }
+
+  openBillingStatement(): void {
+    this.billingForm = this.emptyBillingStatement();
+    this.billingPreview.set(null);
+    this.billingError.set('');
+    this.billingOpen.set(true);
+  }
+
+  closeBillingStatement(): void {
+    if (this.saving()) return;
+    this.billingOpen.set(false);
+    this.billingPreview.set(null);
+    this.billingError.set('');
+  }
+
+  billingTargetTypeChanged(targetType: BillingStatementTarget): void {
+    this.billingForm.targetType = targetType;
+    this.billingForm.targetId = '';
+    this.billingForm.recipientEmail = '';
+    this.billingForm.subject = '';
+    this.billingPreview.set(null);
+    this.billingError.set('');
+  }
+
+  async billingTargetChanged(): Promise<void> {
+    const targetType = this.billingForm.targetType;
+    const targetId = this.billingForm.targetId;
+    this.billingPreview.set(null);
+    this.billingError.set('');
+    this.billingForm.recipientEmail = '';
+    this.billingForm.subject = '';
+    if (!targetId) return;
+
+    this.billingLoading.set(true);
+    try {
+      const preview = await firstValueFrom(
+        this.api.get<BillingStatementPreview>('/finance/billing-statements/preview', {
+          targetType,
+          targetId,
+        }),
+      );
+      if (this.billingForm.targetType !== targetType || this.billingForm.targetId !== targetId) {
+        return;
+      }
+      this.billingPreview.set(preview);
+      this.billingForm.recipientEmail = preview.savedRecipientEmail ?? '';
+      this.billingForm.subject = preview.defaultSubject;
+    } catch (error) {
+      this.billingError.set(
+        apiErrorMessage(error, 'The billing statement preview could not be prepared.'),
+      );
+    } finally {
+      this.billingLoading.set(false);
+    }
+  }
+
+  async sendBillingStatement(): Promise<void> {
+    if (!this.validBillingStatement || this.saving()) return;
+    this.saving.set(true);
+    this.billingError.set('');
+    try {
+      const result = await firstValueFrom(
+        this.api.post<BillingStatementSendResult>('/finance/billing-statements/send', {
+          targetType: this.billingForm.targetType,
+          targetId: this.billingForm.targetId,
+          recipientEmail: this.billingForm.recipientEmail.trim(),
+          rememberEmail: this.billingForm.rememberEmail,
+          statementDate: this.billingForm.statementDate,
+          dueDate: this.billingForm.dueDate || undefined,
+          subject: this.billingForm.subject.trim(),
+          message: this.billingForm.message.trim() || undefined,
+        }),
+      );
+      this.billingOpen.set(false);
+      this.billingPreview.set(null);
+      this.toasts.show(
+        'Billing statement sent',
+        'success',
+        `${result.statementNumber} was sent to ${result.recipientEmail}.`,
+      );
+    } catch (error) {
+      this.billingError.set(
+        apiErrorMessage(error, 'The billing statement could not be sent. Try again.'),
+      );
+    } finally {
+      this.saving.set(false);
+    }
   }
 
   viewExpense(expense: ExpenseRecord): void {
@@ -628,6 +739,26 @@ export class FinancePage implements OnInit {
     );
   }
 
+  get validBillingStatement(): boolean {
+    const preview = this.billingPreview();
+    return Boolean(
+      preview?.emailConfigured &&
+      this.billingForm.targetId &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.billingForm.recipientEmail.trim()) &&
+      this.billingForm.statementDate &&
+      (!this.billingForm.dueDate || this.billingForm.dueDate >= this.billingForm.statementDate) &&
+      this.billingForm.subject.trim(),
+    );
+  }
+
+  billingMoney(value: number | string, currency: string): string {
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+    }).format(Number(value));
+  }
+
   get selectedGroupAllocations(): GroupPaymentAllocation[] {
     return this.groupAllocations().filter((allocation) => allocation.selected);
   }
@@ -690,6 +821,22 @@ export class FinancePage implements OnInit {
       paidAt: new Date().toISOString().slice(0, 10),
       reference: '',
       notes: '',
+    };
+  }
+
+  private emptyBillingStatement(): BillingStatementForm {
+    const statementDate = new Date().toISOString().slice(0, 10);
+    const dueDate = new Date(`${statementDate}T00:00:00.000Z`);
+    dueDate.setUTCDate(dueDate.getUTCDate() + 7);
+    return {
+      targetType: 'CLIENT',
+      targetId: '',
+      recipientEmail: '',
+      rememberEmail: true,
+      statementDate,
+      dueDate: dueDate.toISOString().slice(0, 10),
+      subject: '',
+      message: '',
     };
   }
 
