@@ -187,14 +187,26 @@
             <p class="mt-1 truncate text-xs text-ink-400">{{ client.phone || 'No phone' }}</p>
           </div>
           @if (canEdit) {
-            <button
-              type="button"
-              class="icon-button"
-              aria-label="Edit client"
-              (click)="openEdit(client)"
-            >
-              <svg lucidePencil class="size-4"></svg>
-            </button>
+            <div class="flex items-center justify-end gap-1">
+              @if (canManageGroups) {
+                <button
+                  type="button"
+                  class="text-button"
+                  [attr.aria-label]="'Manage dashboard access for ' + client.businessName"
+                  (click)="openClientPortalAccess(client)"
+                >
+                  Access
+                </button>
+              }
+              <button
+                type="button"
+                class="icon-button"
+                aria-label="Edit client"
+                (click)="openEdit(client)"
+              >
+                <svg lucidePencil class="size-4"></svg>
+              </button>
+            </div>
           }
         </article>
       } @empty {
@@ -450,9 +462,395 @@
         <button type="button" class="secondary-button flex-1" (click)="closeGroupDetails()">
           Close
         </button>
-        <button type="button" class="primary-button flex-1" (click)="showGroupClients(group)">
+        <button type="button" class="secondary-button flex-1" (click)="showGroupClients(group)">
           View in Clients
         </button>
+        @if (canManageGroups) {
+          <button
+            type="button"
+            class="primary-button flex-1"
+            (click)="openGroupPortalAccess(group)"
+          >
+            Dashboard access
+          </button>
+        }
+      </footer>
+    </section>
+  </div>
+}
+
+@if (portalAccessOpen()) {
+  <div class="sheet-backdrop sm:p-4">
+    <section
+      appDialogFocus
+      class="flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-lift sm:h-[min(820px,calc(100dvh-2rem))] sm:max-h-[calc(100dvh-2rem)] sm:max-w-6xl sm:rounded-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="portal-access-title"
+      (dialogEscape)="closePortalAccess()"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="shrink-0 border-b border-champagne-300 bg-champagne-100 px-4 py-4 sm:px-6">
+        <div class="flex items-start gap-3">
+          <span
+            class="flex size-11 shrink-0 items-center justify-center rounded-full bg-gold-100 text-gold-800"
+          >
+            <svg lucideShieldCheck class="size-5"></svg>
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="page-eyebrow">Owner dashboard</p>
+            <h2 id="portal-access-title" class="truncate text-xl font-bold">Multi-store access</h2>
+            <p class="mt-1 truncate text-xs text-ink-500">{{ portalScope.label }}</p>
+          </div>
+          <button
+            data-dialog-initial-focus
+            type="button"
+            class="icon-button"
+            aria-label="Close dashboard access"
+            [disabled]="portalAccessSaving()"
+            (click)="closePortalAccess()"
+          >
+            <svg lucideX class="size-5"></svg>
+          </button>
+        </div>
+
+        @if (!portalResult) {
+          <ol class="mt-4 grid grid-cols-3 gap-2" aria-label="Access setup steps">
+            @for (
+              step of [
+                { number: 1, label: 'Account' },
+                { number: 2, label: 'Stores' },
+                { number: 3, label: 'Review' },
+              ];
+              track step.number
+            ) {
+              <li
+                class="flex min-w-0 items-center gap-2 border-t-2 pt-2 text-xs font-semibold"
+                [class.border-gold-500]="portalAccessStep >= step.number"
+                [class.border-champagne-300]="portalAccessStep < step.number"
+                [class.text-ink-950]="portalAccessStep >= step.number"
+                [class.text-ink-400]="portalAccessStep < step.number"
+              >
+                <span
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full"
+                  [class.bg-gold-500]="portalAccessStep >= step.number"
+                  [class.bg-champagne-200]="portalAccessStep < step.number"
+                  >{{ step.number }}</span
+                >
+                <span class="truncate">{{ step.label }}</span>
+              </li>
+            }
+          </ol>
+        }
+      </header>
+
+      <div class="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+        @if (portalAccessLoading()) {
+          <div class="mx-auto max-w-2xl py-20 text-center" aria-live="polite">
+            <div class="loading-line"></div>
+            <p class="mt-4 text-sm font-semibold text-ink-700">Loading stores and accounts</p>
+          </div>
+        } @else if (portalAccessError() && !portalResult) {
+          <div class="mx-auto max-w-2xl border-l-2 border-danger-700 bg-danger-100 p-4">
+            <p class="text-sm font-semibold text-danger-700">{{ portalAccessError() }}</p>
+          </div>
+        } @else if (portalResult; as result) {
+          <div class="mx-auto max-w-2xl py-5 sm:py-12">
+            <span
+              class="mx-auto flex size-14 items-center justify-center rounded-full bg-success-100 text-success-700"
+            >
+              <svg lucideCheck class="size-7"></svg>
+            </span>
+            <h3 class="mt-5 text-center text-xl font-bold">
+              {{
+                result.mode === 'INVITATION_CREATED'
+                  ? 'Dashboard invitation ready'
+                  : 'Store access updated'
+              }}
+            </h3>
+            <p class="mt-2 text-center text-sm leading-6 text-ink-600">
+              @if (result.mode === 'INVITATION_CREATED') {
+                Share this single-use token securely with {{ result.invitation.username }}. It
+                expires {{ date(result.invitation.expiresAt) }}.
+              } @else {
+                {{ result.user.displayName }} can now open {{ result.user.storeIds.length }}
+                authorized stores with the existing password.
+              }
+            </p>
+            @if (result.mode === 'INVITATION_CREATED') {
+              <div
+                class="mt-6 flex items-center gap-2 rounded-md border border-champagne-300 bg-champagne-100 p-2"
+              >
+                <code class="min-w-0 flex-1 break-all px-2 text-xs font-semibold">{{
+                  result.invitation.activationToken
+                }}</code>
+                <button
+                  type="button"
+                  class="secondary-button shrink-0"
+                  (click)="copyPortalActivationToken()"
+                >
+                  <svg lucideCopy class="size-4"></svg>Copy
+                </button>
+              </div>
+            }
+          </div>
+        } @else if (portalAccessStep === 1) {
+          <div class="mx-auto grid max-w-4xl gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
+            <section>
+              <h3 class="text-base font-bold">
+                {{ portalEditingUserId ? 'Update account' : 'Create or extend an account' }}
+              </h3>
+              <p class="mt-1 text-sm leading-5 text-ink-500">
+                One login can open every store selected in the next step.
+              </p>
+              <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                <label>
+                  <span class="field-label">Display name</span>
+                  <input
+                    class="field-control"
+                    [(ngModel)]="portalForm.displayName"
+                    maxlength="160"
+                    placeholder="Business owner"
+                  />
+                </label>
+                <label>
+                  <span class="field-label">Email or username</span>
+                  <input
+                    class="field-control"
+                    [(ngModel)]="portalForm.username"
+                    [disabled]="!!portalEditingUserId"
+                    maxlength="180"
+                    placeholder="owner@example.com"
+                  />
+                </label>
+              </div>
+              <fieldset class="mt-5">
+                <legend class="field-label">Access role</legend>
+                <div class="grid gap-2 sm:grid-cols-3">
+                  @for (
+                    option of [
+                      { value: 'OWNER', label: 'Owner', detail: 'Full reporting access' },
+                      { value: 'MANAGER', label: 'Manager', detail: 'Operational reports' },
+                      { value: 'VIEWER', label: 'Viewer', detail: 'Read-only reports' },
+                    ];
+                    track option.value
+                  ) {
+                    <label
+                      class="cursor-pointer rounded-md border p-3 transition"
+                      [class.border-gold-500]="portalForm.role === option.value"
+                      [class.bg-gold-50]="portalForm.role === option.value"
+                      [class.border-champagne-300]="portalForm.role !== option.value"
+                    >
+                      <input
+                        type="radio"
+                        class="sr-only"
+                        name="portalRole"
+                        [value]="option.value"
+                        [(ngModel)]="portalForm.role"
+                      />
+                      <strong class="block text-sm">{{ option.label }}</strong>
+                      <span class="mt-1 block text-xs text-ink-500">{{ option.detail }}</span>
+                    </label>
+                  }
+                </div>
+              </fieldset>
+            </section>
+
+            <aside
+              class="border-t border-champagne-300 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <h3 class="text-sm font-bold">Existing accounts</h3>
+                  <p class="mt-1 text-xs text-ink-500">Select one to change its stores.</p>
+                </div>
+                @if (portalEditingUserId) {
+                  <button type="button" class="text-button" (click)="newPortalUser()">New</button>
+                }
+              </div>
+              <div
+                class="mt-3 max-h-64 divide-y divide-champagne-200 overflow-y-auto border-y border-champagne-300"
+              >
+                @for (user of portalUsers(); track user.id) {
+                  <button
+                    type="button"
+                    class="block w-full px-1 py-3 text-left transition hover:bg-champagne-100"
+                    [class.bg-champagne-100]="portalEditingUserId === user.id"
+                    (click)="selectPortalUser(user)"
+                  >
+                    <strong class="block truncate text-sm">{{ user.displayName }}</strong>
+                    <span class="mt-1 block truncate text-xs text-ink-500"
+                      >{{ user.username }} · {{ user.storeIds.length }} stores</span
+                    >
+                  </button>
+                } @empty {
+                  <p class="py-5 text-center text-xs text-ink-500">No accounts in this scope.</p>
+                }
+              </div>
+            </aside>
+          </div>
+        } @else if (portalAccessStep === 2) {
+          <div class="mx-auto max-w-5xl">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div class="mr-auto">
+                <h3 class="text-base font-bold">Choose stores</h3>
+                <p class="mt-1 text-sm text-ink-500">
+                  {{ selectedPortalStoreIds().size }} selected from
+                  {{ portalCandidates().length }} available records
+                </p>
+              </div>
+              <div class="flex gap-2">
+                <button type="button" class="secondary-button" (click)="clearPortalStores()">
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  class="secondary-button"
+                  (click)="selectAllVisiblePortalStores()"
+                >
+                  Select eligible
+                </button>
+              </div>
+            </div>
+            <label class="search-control mt-4">
+              <svg lucideSearch class="size-5 shrink-0 text-ink-400"></svg>
+              <input
+                [(ngModel)]="portalStoreSearch"
+                placeholder="Search store, code, or client"
+                aria-label="Search stores"
+              />
+            </label>
+            <div class="mt-4 divide-y divide-champagne-200 border-y border-champagne-300">
+              @for (store of visiblePortalCandidates; track store.id) {
+                <label
+                  class="grid min-h-16 gap-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)_10rem_auto] sm:items-center"
+                  [class.cursor-pointer]="store.eligible"
+                  [class.opacity-55]="!store.eligible"
+                >
+                  <input
+                    type="checkbox"
+                    class="size-5 accent-gold-500"
+                    [disabled]="!store.eligible"
+                    [checked]="selectedPortalStoreIds().has(store.id)"
+                    (change)="togglePortalStore(store, $any($event.target).checked)"
+                  />
+                  <span class="min-w-0">
+                    <strong class="block truncate text-sm">{{ store.name }}</strong>
+                    <span class="mt-1 block truncate text-xs text-ink-500"
+                      >{{ store.code }} · {{ store.clientName }}</span
+                    >
+                  </span>
+                  <span class="text-xs text-ink-500">
+                    {{
+                      store.lastSnapshotAt ? 'Synced ' + date(store.lastSnapshotAt) : 'Not synced'
+                    }}
+                  </span>
+                  <span
+                    class="status-chip"
+                    [class]="
+                      store.eligible
+                        ? 'bg-success-100 text-success-700'
+                        : 'bg-danger-100 text-danger-700'
+                    "
+                  >
+                    {{ store.eligible ? 'Eligible' : store.exclusionReason }}
+                  </span>
+                </label>
+              } @empty {
+                <p class="py-10 text-center text-sm text-ink-500">No matching stores.</p>
+              }
+            </div>
+          </div>
+        } @else {
+          <div class="mx-auto max-w-3xl">
+            <h3 class="text-base font-bold">Review access</h3>
+            <p class="mt-1 text-sm text-ink-500">
+              Access is saved to the selected stores. Future group members are not added
+              automatically.
+            </p>
+            <dl class="mt-6 divide-y divide-champagne-300 border-y border-champagne-300">
+              <div class="grid gap-1 py-4 sm:grid-cols-[11rem_1fr]">
+                <dt class="text-xs font-semibold text-ink-500">Account</dt>
+                <dd class="text-sm font-bold">
+                  {{ portalForm.displayName }}
+                  <span class="ml-2 font-normal text-ink-500">{{ portalForm.username }}</span>
+                </dd>
+              </div>
+              <div class="grid gap-1 py-4 sm:grid-cols-[11rem_1fr]">
+                <dt class="text-xs font-semibold text-ink-500">Role</dt>
+                <dd class="text-sm font-bold">{{ portalForm.role }}</dd>
+              </div>
+              <div class="grid gap-1 py-4 sm:grid-cols-[11rem_1fr]">
+                <dt class="text-xs font-semibold text-ink-500">Scope</dt>
+                <dd class="text-sm font-bold">
+                  {{ selectedPortalStoreIds().size }} stores across
+                  {{ selectedPortalClients }}
+                  {{ selectedPortalClients === 1 ? 'client' : 'clients' }}
+                </dd>
+              </div>
+            </dl>
+            <div
+              class="mt-5 max-h-56 divide-y divide-champagne-200 overflow-y-auto border-y border-champagne-300"
+            >
+              @for (store of portalCandidates(); track store.id) {
+                @if (selectedPortalStoreIds().has(store.id)) {
+                  <div class="flex items-center justify-between gap-4 py-3 text-sm">
+                    <span class="min-w-0 truncate font-semibold">{{ store.name }}</span>
+                    <span class="shrink-0 text-xs text-ink-500">{{ store.clientName }}</span>
+                  </div>
+                }
+              }
+            </div>
+            @if (portalAccessError()) {
+              <p class="mt-4 bg-danger-100 p-3 text-sm font-semibold text-danger-700">
+                {{ portalAccessError() }}
+              </p>
+            }
+          </div>
+        }
+      </div>
+
+      <footer
+        class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-champagne-300 bg-white px-4 py-3 sm:px-6"
+      >
+        @if (portalResult) {
+          <button type="button" class="primary-button min-w-32" (click)="closePortalAccess()">
+            Done
+          </button>
+        } @else {
+          <button
+            type="button"
+            class="secondary-button mr-auto"
+            [disabled]="portalAccessSaving()"
+            (click)="portalAccessStep === 1 ? closePortalAccess() : portalBack()"
+          >
+            {{ portalAccessStep === 1 ? 'Cancel' : 'Back' }}
+          </button>
+          @if (portalAccessStep < 3) {
+            <button
+              type="button"
+              class="primary-button min-w-32"
+              [disabled]="
+                portalAccessLoading() ||
+                (portalAccessStep === 1 && !portalAccountValid) ||
+                (portalAccessStep === 2 && !selectedPortalStoreIds().size)
+              "
+              (click)="portalNext()"
+            >
+              Continue
+            </button>
+          } @else {
+            <button
+              type="button"
+              class="primary-button min-w-44"
+              [disabled]="portalAccessSaving()"
+              (click)="savePortalAccess()"
+            >
+              <svg lucideUsers class="size-4"></svg>
+              {{ portalAccessSaving() ? 'Saving access' : 'Save dashboard access' }}
+            </button>
+          }
+        }
       </footer>
     </section>
   </div>

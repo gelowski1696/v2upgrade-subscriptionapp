@@ -3,12 +3,16 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
   LucideBuilding2,
+  LucideCheck,
   LucideChevronLeft,
   LucideChevronRight,
+  LucideCopy,
   LucideEye,
   LucidePencil,
   LucidePlus,
   LucideSearch,
+  LucideShieldCheck,
+  LucideUsers,
   LucideX,
 } from '@lucide/angular';
 import { firstValueFrom, forkJoin } from 'rxjs';
@@ -17,10 +21,15 @@ import { apiErrorMessage } from '../../core/api/error-message';
 import { SessionStore } from '../../core/auth/session.store';
 import type {
   ApiPage,
+  AdminPortalAccessResult,
+  AdminPortalUser,
   ClientGroupRecord,
   ClientGroupStatus,
   ClientRecord,
   ClientStatus,
+  PortalRole,
+  PortalStoreCandidate,
+  PortalStoreCandidatesResult,
 } from '../../core/models/api.models';
 import { ToastService } from '../../core/notifications/toast.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog';
@@ -45,17 +54,27 @@ interface ClientGroupForm {
   status: ClientGroupStatus;
 }
 
+interface PortalAccessForm {
+  username: string;
+  displayName: string;
+  role: PortalRole;
+}
+
 @Component({
   selector: 'app-clients',
   imports: [
     FormsModule,
     LucideBuilding2,
+    LucideCheck,
     LucideChevronLeft,
     LucideChevronRight,
+    LucideCopy,
     LucideEye,
     LucidePencil,
     LucidePlus,
     LucideSearch,
+    LucideShieldCheck,
+    LucideUsers,
     LucideX,
     ConfirmDialogComponent,
     DialogFocusDirective,
@@ -74,6 +93,13 @@ export class ClientsPage implements OnInit, OnDestroy {
   readonly groupMembers = signal<ClientRecord[]>([]);
   readonly groupMembersLoading = signal(false);
   readonly groupMembersError = signal('');
+  readonly portalAccessOpen = signal(false);
+  readonly portalAccessLoading = signal(false);
+  readonly portalAccessSaving = signal(false);
+  readonly portalAccessError = signal('');
+  readonly portalCandidates = signal<PortalStoreCandidate[]>([]);
+  readonly portalUsers = signal<AdminPortalUser[]>([]);
+  readonly selectedPortalStoreIds = signal<Set<string>>(new Set());
   readonly selectedClientIds = signal<Set<string>>(new Set());
   readonly total = signal(0);
   readonly groupTotal = signal(0);
@@ -92,6 +118,12 @@ export class ClientsPage implements OnInit, OnDestroy {
   form: ClientForm = this.emptyForm();
   groupEditing: ClientGroupRecord | null = null;
   groupForm: ClientGroupForm = this.emptyGroupForm();
+  portalAccessStep: 1 | 2 | 3 = 1;
+  portalScope: { clientId?: string; groupId?: string; label: string } = { label: '' };
+  portalForm: PortalAccessForm = { username: '', displayName: '', role: 'OWNER' };
+  portalEditingUserId = '';
+  portalStoreSearch = '';
+  portalResult: AdminPortalAccessResult | null = null;
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
@@ -360,6 +392,189 @@ export class ClientsPage implements OnInit, OnDestroy {
     this.groupMembers.set([]);
     this.groupMembersError.set('');
     this.groupMembersLoading.set(false);
+  }
+
+  openClientPortalAccess(client: ClientRecord): void {
+    void this.openPortalAccess({ clientId: client.id, label: client.businessName });
+  }
+
+  openGroupPortalAccess(group: ClientGroupRecord): void {
+    this.closeGroupDetails();
+    void this.openPortalAccess({ groupId: group.id, label: group.name });
+  }
+
+  closePortalAccess(): void {
+    if (this.portalAccessSaving()) return;
+    this.portalAccessOpen.set(false);
+    this.portalResult = null;
+  }
+
+  selectPortalUser(user: AdminPortalUser): void {
+    this.portalEditingUserId = user.id;
+    this.portalForm = {
+      username: user.username,
+      displayName: user.displayName,
+      role: user.role,
+    };
+    this.selectedPortalStoreIds.set(new Set(user.storeIds));
+  }
+
+  newPortalUser(): void {
+    this.portalEditingUserId = '';
+    this.portalForm = { username: '', displayName: '', role: 'OWNER' };
+    this.selectedPortalStoreIds.set(
+      new Set(
+        this.portalCandidates()
+          .filter((store) => store.eligible)
+          .map((store) => store.id),
+      ),
+    );
+  }
+
+  portalNext(): void {
+    if (this.portalAccessStep === 1 && !this.portalAccountValid) return;
+    if (this.portalAccessStep === 2 && !this.selectedPortalStoreIds().size) return;
+    if (this.portalAccessStep === 1) this.portalAccessStep = 2;
+    else if (this.portalAccessStep === 2) this.portalAccessStep = 3;
+  }
+
+  portalBack(): void {
+    if (this.portalAccessStep === 3) this.portalAccessStep = 2;
+    else if (this.portalAccessStep === 2) this.portalAccessStep = 1;
+  }
+
+  togglePortalStore(store: PortalStoreCandidate, checked: boolean): void {
+    if (!store.eligible) return;
+    const selected = new Set(this.selectedPortalStoreIds());
+    if (checked) selected.add(store.id);
+    else selected.delete(store.id);
+    this.selectedPortalStoreIds.set(selected);
+  }
+
+  selectAllVisiblePortalStores(): void {
+    const selected = new Set(this.selectedPortalStoreIds());
+    for (const store of this.visiblePortalCandidates) {
+      if (store.eligible) selected.add(store.id);
+    }
+    this.selectedPortalStoreIds.set(selected);
+  }
+
+  clearPortalStores(): void {
+    this.selectedPortalStoreIds.set(new Set());
+  }
+
+  async savePortalAccess(): Promise<void> {
+    if (
+      !this.portalAccountValid ||
+      !this.selectedPortalStoreIds().size ||
+      this.portalAccessSaving()
+    ) {
+      return;
+    }
+    this.portalAccessSaving.set(true);
+    this.portalAccessError.set('');
+    try {
+      const body = {
+        username: this.portalForm.username.trim(),
+        displayName: this.portalForm.displayName.trim(),
+        role: this.portalForm.role,
+        storeIds: [...this.selectedPortalStoreIds()],
+      };
+      if (this.portalEditingUserId) {
+        const user = await firstValueFrom(
+          this.api.put<AdminPortalUser>(
+            `/admin/portal-access/users/${this.portalEditingUserId}/access`,
+            { role: body.role, storeIds: body.storeIds },
+          ),
+        );
+        this.portalResult = { mode: 'ACCESS_UPDATED', user };
+      } else {
+        this.portalResult = await firstValueFrom(
+          this.api.post<AdminPortalAccessResult>('/admin/portal-access/invitations', body),
+        );
+      }
+      this.toasts.show(
+        this.portalResult.mode === 'INVITATION_CREATED'
+          ? 'Dashboard invitation created'
+          : 'Dashboard access updated',
+        'success',
+      );
+    } catch (error) {
+      this.portalAccessError.set(apiErrorMessage(error, 'Dashboard access could not be saved.'));
+    } finally {
+      this.portalAccessSaving.set(false);
+    }
+  }
+
+  async copyPortalActivationToken(): Promise<void> {
+    if (this.portalResult?.mode !== 'INVITATION_CREATED') return;
+    await navigator.clipboard.writeText(this.portalResult.invitation.activationToken);
+    this.toasts.show('Activation token copied', 'success');
+  }
+
+  get visiblePortalCandidates(): PortalStoreCandidate[] {
+    const query = this.portalStoreSearch.trim().toLowerCase();
+    if (!query) return this.portalCandidates();
+    return this.portalCandidates().filter(
+      (store) =>
+        store.name.toLowerCase().includes(query) ||
+        store.code.toLowerCase().includes(query) ||
+        store.clientName.toLowerCase().includes(query),
+    );
+  }
+
+  get portalAccountValid(): boolean {
+    return !!this.portalForm.username.trim() && !!this.portalForm.displayName.trim();
+  }
+
+  get selectedPortalClients(): number {
+    const selected = this.selectedPortalStoreIds();
+    return new Set(
+      this.portalCandidates()
+        .filter((store) => selected.has(store.id))
+        .map((store) => store.clientId),
+    ).size;
+  }
+
+  private async openPortalAccess(scope: {
+    clientId?: string;
+    groupId?: string;
+    label: string;
+  }): Promise<void> {
+    this.portalScope = scope;
+    this.portalAccessStep = 1;
+    this.portalResult = null;
+    this.portalStoreSearch = '';
+    this.portalCandidates.set([]);
+    this.portalUsers.set([]);
+    this.portalAccessError.set('');
+    this.portalAccessOpen.set(true);
+    this.portalAccessLoading.set(true);
+    this.newPortalUser();
+    try {
+      const params = {
+        clientId: scope.clientId,
+        groupId: scope.groupId,
+      };
+      const result = await firstValueFrom(
+        forkJoin({
+          candidates: this.api.get<PortalStoreCandidatesResult>(
+            '/admin/portal-access/candidates',
+            params,
+          ),
+          users: this.api.get<AdminPortalUser[]>('/admin/portal-access/users', params),
+        }),
+      );
+      this.portalCandidates.set(result.candidates.items);
+      this.portalUsers.set(result.users);
+      this.newPortalUser();
+    } catch (error) {
+      this.portalAccessError.set(
+        apiErrorMessage(error, 'Dashboard access information could not be loaded.'),
+      );
+    } finally {
+      this.portalAccessLoading.set(false);
+    }
   }
 
   resetGroupForm(): void {

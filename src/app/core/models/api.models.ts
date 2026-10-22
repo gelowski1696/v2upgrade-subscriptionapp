@@ -53,6 +53,65 @@ export interface ClientRecord {
   updatedAt: string;
 }
 
+export type PortalRole = 'OWNER' | 'MANAGER' | 'VIEWER';
+
+export interface PortalStoreCandidate {
+  id: string;
+  code: string;
+  name: string;
+  status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+  clientId: string;
+  clientCode: string;
+  clientName: string;
+  groupId: string | null;
+  eligible: boolean;
+  exclusionReason: string | null;
+  registeredDeviceCount: number;
+  lastSnapshotAt: string | null;
+}
+
+export interface PortalStoreCandidatesResult {
+  items: PortalStoreCandidate[];
+  total: number;
+  eligible: number;
+}
+
+export interface AdminPortalUser {
+  id: string;
+  username: string;
+  displayName: string;
+  role: PortalRole;
+  status: 'INVITED' | 'ACTIVE' | 'DISABLED';
+  lastLoginAt: string | null;
+  storeIds: string[];
+  stores: Array<{
+    id: string;
+    code: string;
+    name: string;
+    clientId: string;
+    clientCode: string;
+    clientName: string;
+  }>;
+}
+
+export type AdminPortalAccessResult =
+  | {
+      mode: 'INVITATION_CREATED';
+      invitation: {
+        id: string;
+        username: string;
+        displayName: string;
+        role: PortalRole;
+        storeIds: string[];
+        expiresAt: string;
+        activationToken: string;
+      };
+    }
+  | {
+      mode: 'ACCESS_UPDATED';
+      user: AdminPortalUser;
+    };
+
 export type PlanStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
 export type BillingInterval = 'MONTHLY' | 'QUARTERLY' | 'SEMIANNUAL' | 'ANNUAL' | 'CUSTOM';
 
