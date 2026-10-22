@@ -10,6 +10,7 @@ export const FEATURE_MOD_GROUPS = [
       ['customerGroups', 'Customer groups'],
       ['loyaltyPoints', 'Loyalty points'],
       ['scheduledDeliveries', 'Scheduled deliveries'],
+      ['cylinderSwapping', 'Cylinder swapping & weights'],
     ],
   },
   {

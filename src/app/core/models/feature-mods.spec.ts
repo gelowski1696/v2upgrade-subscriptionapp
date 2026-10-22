@@ -13,11 +13,13 @@ describe('featureModsFrom', () => {
       reports: true,
       summaryCsv: true,
       discountReport: false,
+      cylinderSwapping: true,
     });
 
     expect(Object.keys(result)).toHaveLength(FEATURE_MOD_KEYS.length);
     expect(result.summaryCsv).toBe(true);
     expect(result.discountReport).toBe(false);
+    expect(result.cylinderSwapping).toBe(true);
     expect(result.cashAdvance).toBe(false);
     expect(result).not.toHaveProperty('reports');
   });
