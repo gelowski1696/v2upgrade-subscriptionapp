@@ -527,6 +527,14 @@ export class ClientsPage implements OnInit, OnDestroy {
     return !!this.portalForm.username.trim() && !!this.portalForm.displayName.trim();
   }
 
+  get portalIsGroupScope(): boolean {
+    return !!this.portalScope.groupId;
+  }
+
+  get portalAccessTitle(): string {
+    return this.portalIsGroupScope ? 'Multi-store group access' : 'Store dashboard access';
+  }
+
   get selectedPortalClients(): number {
     const selected = this.selectedPortalStoreIds();
     return new Set(

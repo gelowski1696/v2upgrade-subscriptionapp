@@ -64,6 +64,8 @@ export interface PortalStoreCandidate {
   clientCode: string;
   clientName: string;
   groupId: string | null;
+  groupCode: string | null;
+  groupName: string | null;
   eligible: boolean;
   exclusionReason: string | null;
   registeredDeviceCount: number;
